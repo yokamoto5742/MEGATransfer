@@ -63,10 +63,22 @@ def get_src_dir() -> str:
     return config.get('Paths', 'src_dir')
 
 
+def get_mega_url() -> str:
+    """MEGAファイルリクエストのURLを取得"""
+    config = load_config()
+    return config.get('URL', 'MEGAfilerequest')
+
+
 def get_rename_pattern() -> re.Pattern:
     """ファイル名変換用の正規表現パターンを取得"""
     config = load_config()
-    pattern_str = config.get('Rename', 'pattern', fallback=r'_[A-Za-z0-9]{6}$')
+    # config.iniの [filename] セクションを優先的に読み込む
+    pattern_str = config.get('filename', 'pattern', fallback=None)
+
+    if not pattern_str:
+        # 後方互換性のため Rename セクションも確認
+        pattern_str = config.get('Rename', 'pattern', fallback=r'_[A-Za-z0-9]{6}$')
+
     try:
         return re.compile(pattern_str)
     except re.error as e:

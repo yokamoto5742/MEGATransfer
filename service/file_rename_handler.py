@@ -3,16 +3,21 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
 
-from utils.config_manager import get_rename_pattern, get_wait_time
+from utils.config_manager import get_rename_pattern, get_wait_time, get_mega_url
+from service.mega_uploader import MegaUploader
 
 
 class FileRenameHandler(FileSystemEventHandler):
-    """ファイルシステムイベントを処理し、ファイル名を変換するハンドラー"""
+    """ファイルシステムイベントを処理し、アップロードとリネームを行うハンドラー"""
 
     def __init__(self):
         super().__init__()
         self.pattern = get_rename_pattern()
         self.wait_time = get_wait_time()
+
+        # MEGAアップローダーの初期化
+        mega_url = get_mega_url()
+        self.uploader = MegaUploader(mega_url)
 
     def on_created(self, event):
         """新規ファイル作成時の処理"""
@@ -27,7 +32,7 @@ class FileRenameHandler(FileSystemEventHandler):
         self._process_file(event.dest_path)
 
     def _process_file(self, file_path: str):
-        """ファイルを処理してリネームする"""
+        """ファイルを処理する（アップロード -> リネーム）"""
         # ファイル書き込み完了を待つ
         time.sleep(self.wait_time)
 
@@ -38,11 +43,22 @@ class FileRenameHandler(FileSystemEventHandler):
         filename = path.stem  # 拡張子を除いたファイル名
         extension = path.suffix  # 拡張子
 
-        if self.should_rename(filename):
+        if self.should_process(filename):
+            print(f"[検知] 対象ファイルが見つかりました: {filename}")
+
+            # 1. MEGAへアップロード
+            upload_success = self.uploader.upload_file(path)
+
+            if upload_success:
+                print(f"[成功] アップロードが完了しました")
+            else:
+                print(f"[失敗] アップロードに失敗しました。処理を継続します。")
+
+            # 2. リネーム処理 (元のロジック)
             self.rename_file(path, filename, extension)
 
-    def should_rename(self, filename: str) -> bool:
-        """ファイル名が変換対象かどうかを判定"""
+    def should_process(self, filename: str) -> bool:
+        """ファイル名が処理対象かどうかを判定"""
         return bool(self.pattern.search(filename))
 
     def rename_file(self, file_path: Path, filename: str, extension: str):
