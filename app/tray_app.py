@@ -7,7 +7,7 @@ import pystray
 from PIL import Image, ImageDraw
 from watchdog.observers import Observer
 
-from service.file_rename_handler import FileRenameHandler
+from service.file_upload_handler import FileUploadHandler
 from utils.config_manager import get_src_dir
 
 
@@ -28,21 +28,18 @@ class TrayApp:
 
     def _create_icon_image(self) -> Image.Image:
         """タスクトレイ用のアイコン画像を作成"""
-        # 64x64の画像を作成
         size = 64
         image = Image.new('RGBA', (size, size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
 
-        # 背景円（青）
         draw.ellipse([4, 4, size - 4, size - 4], fill='#4A90D9')
 
-        # ファイルアイコン風の図形（白）
-        # 外枠
+        # ファイルアイコン風の図形
         draw.rectangle([20, 12, 44, 52], fill='white')
         # 折り返し部分
         draw.polygon([(32, 12), (44, 24), (32, 24)], fill='#4A90D9')
 
-        # 矢印（リネームを表現）
+        # 矢印
         draw.line([(24, 38), (40, 38)], fill='#4A90D9', width=3)
         draw.polygon([(36, 33), (42, 38), (36, 43)], fill='#4A90D9')
 
@@ -81,7 +78,7 @@ class TrayApp:
 
     def start_watching(self):
         """ファイル監視を開始"""
-        event_handler = FileRenameHandler()
+        event_handler = FileUploadHandler()
         self.observer = Observer()
         self.observer.schedule(event_handler, self.src_dir, recursive=False)
         self.observer.start()
@@ -111,5 +108,4 @@ class TrayApp:
         print("[起動] タスクトレイに常駐しています")
         print("       終了するにはタスクトレイアイコンを右クリック→「終了」")
 
-        # タスクトレイアイコンを実行（メインスレッドでブロック）
         self.icon.run()
