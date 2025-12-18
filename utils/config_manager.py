@@ -70,7 +70,11 @@ def get_mega_url() -> str:
 
 
 def get_rename_pattern() -> re.Pattern:
-    """ファイル名変換用の正規表現パターンを取得"""
+    """ファイル名変換用の正規表現パターンを取得
+
+    パターンはファイル名（stem）の末尾にマッチする
+    $がない場合は自動的に末尾マッチとして扱う
+    """
     config = load_config()
     # config.iniの [filename] セクションを優先的に読み込む
     pattern_str = config.get('filename', 'pattern', fallback=None)
@@ -78,6 +82,10 @@ def get_rename_pattern() -> re.Pattern:
     if not pattern_str:
         # 後方互換性のため Rename セクションも確認
         pattern_str = config.get('Rename', 'pattern', fallback=r'_[A-Za-z0-9]{6}$')
+
+    # パターンが$で終わっていない場合は末尾マッチとして$を追加
+    if not pattern_str.endswith('$'):
+        pattern_str = pattern_str + '$'
 
     try:
         return re.compile(pattern_str)
