@@ -1,6 +1,9 @@
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
-from playwright.sync_api import sync_playwright, Page
+
+from playwright.sync_api import Page, sync_playwright
 
 
 class MegaUploader:
@@ -15,6 +18,19 @@ class MegaUploader:
 
     def __init__(self, url: str):
         self.url = url
+
+    @contextmanager
+    def _open_mega_page(self) -> Generator[Page, None, None]:
+        """ブラウザを起動しMEGAページを開く"""
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(self.url)
+            page.wait_for_load_state("networkidle")
+            try:
+                yield page
+            finally:
+                browser.close()
 
     def _wait_for_upload_complete(self, page: Page) -> bool:
         """「アップロード済み」が表示されるまで待機"""
@@ -57,23 +73,9 @@ class MegaUploader:
     def upload_file(self, file_path: Path) -> bool:
         """指定されたファイルをMEGAにアップロードする（単一ファイル用）"""
         print(f"[アップロード開始] MEGAへの接続: {file_path.name}")
-
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-
-                # MEGAのURLへ移動
-                page.goto(self.url)
-
-                # ページのロード完了を待機
-                page.wait_for_load_state("networkidle")
-
-                result = self._upload_single_file(page, file_path)
-
-                browser.close()
-                return result
-
+            with self._open_mega_page() as page:
+                return self._upload_single_file(page, file_path)
         except Exception as e:
             print(f"[エラー] Playwrightによるアップロード失敗: {e}")
             return False
@@ -96,24 +98,11 @@ class MegaUploader:
         uploaded_files: list[Path] = []
 
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-
-                # MEGAのURLへ移動
-                page.goto(self.url)
-
-                # ページのロード完了を待機
-                page.wait_for_load_state("networkidle")
-
+            with self._open_mega_page() as page:
                 for i, file_path in enumerate(file_paths, 1):
                     print(f"[進捗] {i}/{len(file_paths)} - {file_path.name}")
-
                     if self._upload_single_file(page, file_path):
                         uploaded_files.append(file_path)
-
-                browser.close()
-
         except Exception as e:
             print(f"[エラー] Playwrightによるアップロード失敗: {e}")
 

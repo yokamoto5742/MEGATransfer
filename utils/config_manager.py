@@ -2,9 +2,6 @@ import configparser
 import os
 import re
 import sys
-from pathlib import Path
-
-from dotenv import load_dotenv
 
 
 def get_config_path():
@@ -19,19 +16,6 @@ def get_config_path():
 
 
 CONFIG_PATH = get_config_path()
-
-
-def load_environment_variables():
-    current_dir = Path(__file__).parent.parent
-    env_path = current_dir / '.env'
-
-    if env_path.exists():
-        load_dotenv(env_path)
-        return True
-    return False
-
-
-load_environment_variables()
 
 
 def load_config() -> configparser.ConfigParser:
@@ -78,10 +62,6 @@ def get_rename_pattern() -> re.Pattern:
     config = load_config()
     # config.iniの [filename] セクションを優先的に読み込む
     pattern_str = config.get('filename', 'pattern', fallback=None)
-
-    if not pattern_str:
-        # 後方互換性のため Rename セクションも確認
-        pattern_str = config.get('Rename', 'pattern', fallback=r'_[A-Za-z0-9]{6}$')
 
     # パターンが$で終わっていない場合は末尾マッチとして$を追加
     if not pattern_str.endswith('$'):
