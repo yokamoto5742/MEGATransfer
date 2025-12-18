@@ -4,20 +4,18 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
 
-from utils.config_manager import get_rename_pattern, get_wait_time, get_mega_url
+from utils.config_manager import get_batch_delay, get_mega_url, get_rename_pattern, get_wait_time
 from service.mega_uploader import MegaUploader
 
 
 class FileUploadHandler(FileSystemEventHandler):
     """ファイルシステムイベントを処理するハンドラー"""
 
-    # 最後のファイル検知から処理を開始するまでの待機時間（秒）
-    BATCH_DELAY = 3.0
-
     def __init__(self):
         super().__init__()
         self.pattern = get_rename_pattern()
         self.wait_time = get_wait_time()
+        self.batch_delay = get_batch_delay()
 
         # MEGAアップローダーの初期化
         mega_url = get_mega_url()
@@ -68,7 +66,7 @@ class FileUploadHandler(FileSystemEventHandler):
         if self._timer:
             self._timer.cancel()
 
-        self._timer = threading.Timer(self.BATCH_DELAY, self._process_pending_files)
+        self._timer = threading.Timer(self.batch_delay, self._process_pending_files)
         self._timer.start()
 
     def _process_pending_files(self):

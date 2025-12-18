@@ -5,25 +5,29 @@ from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
 
+from utils.config_manager import (
+    get_check_interval,
+    get_headless,
+    get_max_wait_time,
+    get_upload_complete_text,
+)
+
 
 class MegaUploader:
     """MEGAファイルリクエストへのアップロードを実施"""
 
-    # アップロード完了を示すテキスト
-    UPLOAD_COMPLETE_TEXT = "アップロード済み"
-    # 完了チェックの最大待機時間（秒）
-    MAX_WAIT_TIME = 300
-    # 完了チェックの間隔（秒）
-    CHECK_INTERVAL = 0.5
-
     def __init__(self, url: str):
         self.url = url
+        self.upload_complete_text = get_upload_complete_text()
+        self.max_wait_time = get_max_wait_time()
+        self.check_interval = get_check_interval()
+        self.headless = get_headless()
 
     @contextmanager
     def _open_mega_page(self) -> Generator[Page, None, None]:
         """ブラウザを起動しMEGAページを開く"""
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(headless=self.headless)
             page = browser.new_page()
             page.goto(self.url)
             page.wait_for_load_state("networkidle")
@@ -34,13 +38,13 @@ class MegaUploader:
 
     def _wait_for_upload_complete(self, page: Page) -> bool:
         """「アップロード済み」が表示されるまで待機"""
-        elapsed = 0
-        while elapsed < self.MAX_WAIT_TIME:
+        elapsed = 0.0
+        while elapsed < self.max_wait_time:
             # ページ内に「アップロード済み」が存在するか確認
-            if page.locator(f"text={self.UPLOAD_COMPLETE_TEXT}").count() > 0:
+            if page.locator(f"text={self.upload_complete_text}").count() > 0:
                 return True
-            time.sleep(self.CHECK_INTERVAL)
-            elapsed += self.CHECK_INTERVAL
+            time.sleep(self.check_interval)
+            elapsed += self.check_interval
         return False
 
     def _upload_single_file(self, page: Page, file_path: Path) -> bool:

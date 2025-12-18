@@ -79,3 +79,33 @@ def get_wait_time() -> float:
     """ファイル書き込み完了を待つ時間を取得（秒）"""
     config = load_config()
     return config.getfloat('App', 'wait_time', fallback=0.5)
+
+
+def get_batch_delay() -> float:
+    """バッチ処理の待機時間を取得（秒）"""
+    config = load_config()
+    return config.getfloat('App', 'batch_delay', fallback=3.0)
+
+
+def get_upload_complete_text() -> str:
+    """アップロード完了を示すテキストを取得"""
+    config = load_config()
+    return config.get('Uploader', 'upload_complete_text', fallback='アップロード済み')
+
+
+def get_max_wait_time() -> float:
+    """完了チェックの最大待機時間を取得（秒）"""
+    config = load_config()
+    return config.getfloat('Uploader', 'max_wait_time', fallback=300)
+
+
+def get_check_interval() -> float:
+    """完了チェックの間隔を取得（秒）"""
+    config = load_config()
+    return config.getfloat('Uploader', 'check_interval', fallback=0.5)
+
+
+def get_headless() -> bool:
+    """ヘッドレスモードで実行するかどうかを取得"""
+    config = load_config()
+    return config.getboolean('Uploader', 'headless', fallback=True)
