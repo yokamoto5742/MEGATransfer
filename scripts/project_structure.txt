@@ -1,0 +1,30 @@
+============================================================
+プロジェクト構造: MEGATransfer
+パス: C:\Users\yokam\PycharmProjects\MEGATransfer
+生成日時: 2025-12-18 18:42:27
+============================================================
+
+└── MEGATransfer
+    ├── app
+    │   ├── __init__.py
+    │   └── tray_app.py
+    ├── docs
+    │   ├── README.md
+    │   └── LICENSE
+    ├── scripts
+    │   ├── __init__.py
+    │   ├── project_structure.py
+    │   └── version_manager.py
+    ├── service
+    │   ├── __init__.py
+    │   ├── file_upload_handler.py
+    │   └── mega_uploader.py
+    ├── utils
+    │   ├── config.ini
+    │   ├── __init__.py
+    │   └── config_manager.py
+    ├── requirements.txt
+    ├── build.py
+    ├── CLAUDE.md
+    ├── main.py
+    └── pyrightconfig.json

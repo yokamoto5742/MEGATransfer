@@ -17,10 +17,10 @@ class MegaUploader:
         self.url = url
 
     def _wait_for_upload_complete(self, page: Page) -> bool:
-        """「アップロード済み」テキストが表示されるまで待機"""
+        """「アップロード済み」が表示されるまで待機"""
         elapsed = 0
         while elapsed < self.MAX_WAIT_TIME:
-            # ページ内に「アップロード済み」テキストが存在するか確認
+            # ページ内に「アップロード済み」が存在するか確認
             if page.locator(f"text={self.UPLOAD_COMPLETE_TEXT}").count() > 0:
                 return True
             time.sleep(self.CHECK_INTERVAL)
@@ -28,7 +28,7 @@ class MegaUploader:
         return False
 
     def _upload_single_file(self, page: Page, file_path: Path) -> bool:
-        """1つのファイルをアップロードする（ブラウザは開いたまま）"""
+        """1つのファイルをアップロードする）"""
         print(f"[アップロード開始] {file_path.name}")
 
         try:
@@ -60,7 +60,7 @@ class MegaUploader:
 
         try:
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=False)
+                browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
 
                 # MEGAのURLへ移動
@@ -97,7 +97,7 @@ class MegaUploader:
 
         try:
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=False)
+                browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
 
                 # MEGAのURLへ移動
@@ -111,10 +111,6 @@ class MegaUploader:
 
                     if self._upload_single_file(page, file_path):
                         uploaded_files.append(file_path)
-
-                    # 次のファイルアップロードのために少し待機
-                    if i < len(file_paths):
-                        time.sleep(1)
 
                 browser.close()
 

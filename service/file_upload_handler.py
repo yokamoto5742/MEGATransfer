@@ -48,8 +48,8 @@ class FileUploadHandler(FileSystemEventHandler):
         path = Path(file_path)
         if not path.exists():
             return
-
-        filename = path.stem  # 拡張子を除いたファイル名
+        # 拡張子を除いたファイル名
+        filename = path.stem
 
         if self.should_process(filename):
             print(f"[検知] 対象ファイルが見つかりました: {filename}")
