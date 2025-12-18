@@ -79,6 +79,10 @@ class TrayApp:
     def start_watching(self):
         """ファイル監視を開始"""
         event_handler = FileUploadHandler()
+
+        # 起動時に既存ファイルをスキャンして処理
+        event_handler.scan_existing_files(self.src_dir)
+
         self.observer = Observer()
         self.observer.schedule(event_handler, self.src_dir, recursive=False)
         self.observer.start()

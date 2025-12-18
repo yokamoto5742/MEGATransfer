@@ -122,3 +122,26 @@ class FileUploadHandler(FileSystemEventHandler):
         if self._timer:
             self._timer.cancel()
         self._process_pending_files()
+
+    def scan_existing_files(self, directory: str):
+        """指定ディレクトリ内の既存ファイルをスキャンしてキューに追加"""
+        dir_path = Path(directory)
+        if not dir_path.exists():
+            return
+
+        print(f"[スキャン] 既存ファイルを確認しています: {directory}")
+
+        found_count = 0
+        for file_path in dir_path.iterdir():
+            if file_path.is_file() and self.should_process(file_path.stem):
+                print(f"[検知] 既存の対象ファイルが見つかりました: {file_path.name}")
+                with self._lock:
+                    if file_path not in self._pending_files:
+                        self._pending_files.append(file_path)
+                        found_count += 1
+
+        if found_count > 0:
+            print(f"[スキャン完了] {found_count}件の既存ファイルをキューに追加しました")
+            self._reset_timer()
+        else:
+            print("[スキャン完了] 処理対象の既存ファイルはありませんでした")
