@@ -18,6 +18,17 @@ def get_config_path():
 CONFIG_PATH = get_config_path()
 
 
+def get_config_value(config: configparser.ConfigParser, section: str, key: str, default: Any) -> Any:
+    try:
+        value = config[section][key]
+        # bool型の場合は文字列を正しくパース
+        if isinstance(default, bool):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return type(default)(value)
+    except (KeyError, ValueError, TypeError):
+        return default
+
+
 def load_config() -> configparser.ConfigParser:
     config = configparser.ConfigParser()
     try:
@@ -109,3 +120,4 @@ def get_headless() -> bool:
     """ヘッドレスモードで実行するかどうかを取得"""
     config = load_config()
     return config.getboolean('Uploader', 'headless', fallback=True)
+
