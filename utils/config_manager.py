@@ -2,6 +2,7 @@ import configparser
 import os
 import re
 import sys
+from typing import Any
 
 
 def get_config_path():
@@ -120,4 +121,10 @@ def get_headless() -> bool:
     """ヘッドレスモードで実行するかどうかを取得"""
     config = load_config()
     return config.getboolean('Uploader', 'headless', fallback=True)
+
+
+def get_post_upload_wait() -> float:
+    """アップロード完了後の待機時間を取得（秒）"""
+    config = load_config()
+    return config.getfloat('Uploader', 'post_upload_wait', fallback=3.0)
 

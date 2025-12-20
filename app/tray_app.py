@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 import sys
@@ -9,6 +10,8 @@ from watchdog.observers import Observer
 
 from service.file_upload_handler import FileUploadHandler
 from utils.config_manager import get_src_dir
+
+logger = logging.getLogger(__name__)
 
 
 class TrayApp:
@@ -23,7 +26,7 @@ class TrayApp:
     def _validate_src_dir(self):
         """監視フォルダの存在確認"""
         if not os.path.exists(self.src_dir):
-            print(f"[エラー] 監視フォルダが存在しません: {self.src_dir}")
+            logger.error(f"監視フォルダが存在しません: {self.src_dir}")
             sys.exit(1)
 
     def _create_icon_image(self) -> Image.Image:
@@ -51,7 +54,7 @@ class TrayApp:
 
     def _quit_app(self):
         """アプリケーションを終了"""
-        print("[終了] アプリケーションを終了します...")
+        logger.info("アプリケーションを終了します...")
         self.stop_watching()
         if self.icon:
             self.icon.stop()
@@ -86,14 +89,14 @@ class TrayApp:
         self.observer = Observer()
         self.observer.schedule(event_handler, self.src_dir, recursive=False)
         self.observer.start()
-        print(f"[開始] フォルダ監視を開始しました: {self.src_dir}")
+        logger.info(f"フォルダ監視を開始しました: {self.src_dir}")
 
     def stop_watching(self):
         """ファイル監視を停止"""
         if self.observer:
             self.observer.stop()
             self.observer.join()
-            print("[停止] フォルダ監視を停止しました")
+            logger.info("フォルダ監視を停止しました")
 
     def run(self):
         """アプリケーションを実行"""
@@ -109,7 +112,7 @@ class TrayApp:
             menu=self._create_menu()
         )
 
-        print("[起動] タスクトレイに常駐しています")
-        print("       終了するにはタスクトレイアイコンを右クリック→「終了」")
+        logger.info("タスクトレイに常駐しています")
+        logger.info("終了するにはタスクトレイアイコンを右クリック→「終了」")
 
         self.icon.run()

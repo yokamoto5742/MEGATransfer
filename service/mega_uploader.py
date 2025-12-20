@@ -1,3 +1,4 @@
+import logging
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -9,8 +10,11 @@ from utils.config_manager import (
     get_check_interval,
     get_headless,
     get_max_wait_time,
+    get_post_upload_wait,
     get_upload_complete_text,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MegaUploader:
@@ -22,6 +26,7 @@ class MegaUploader:
         self.max_wait_time = get_max_wait_time()
         self.check_interval = get_check_interval()
         self.headless = get_headless()
+        self.post_upload_wait = get_post_upload_wait()
 
     @contextmanager
     def _open_mega_page(self) -> Generator[Page, None, None]:
@@ -48,8 +53,8 @@ class MegaUploader:
         return False
 
     def _upload_single_file(self, page: Page, file_path: Path) -> bool:
-        """1つのファイルをアップロードする）"""
-        print(f"[アップロード開始] {file_path.name}")
+        """1つのファイルをアップロードする"""
+        logger.info(f"アップロード開始: {file_path.name}")
 
         try:
             # input[type="file"] を探してファイルをセットする
@@ -57,31 +62,33 @@ class MegaUploader:
 
             if file_input.count() > 0:
                 file_input.set_input_files(str(file_path))
-                print(f"[アップロード中...] ファイルを選択しました")
+                logger.debug("ファイルを選択しました")
 
                 # 「アップロード済み」表示を待機
                 if self._wait_for_upload_complete(page):
-                    print(f"[アップロード完了] {file_path.name}")
+                    logger.info(f"アップロード完了: {file_path.name}")
+                    # アップロード完了後に待機
+                    time.sleep(self.post_upload_wait)
                     return True
                 else:
-                    print(f"[警告] 完了確認がタイムアウトしました: {file_path.name}")
+                    logger.warning(f"完了確認がタイムアウトしました: {file_path.name}")
                     return False
             else:
-                print("[エラー] アップロード用のinputタグが見つかりませんでした")
+                logger.error("アップロード用のinputタグが見つかりませんでした")
                 return False
 
         except Exception as e:
-            print(f"[エラー] アップロード失敗: {file_path.name} - {e}")
+            logger.error(f"アップロード失敗: {file_path.name} - {e}")
             return False
 
     def upload_file(self, file_path: Path) -> bool:
         """指定されたファイルをMEGAにアップロードする（単一ファイル用）"""
-        print(f"[アップロード開始] MEGAへの接続: {file_path.name}")
+        logger.info(f"MEGAへの接続: {file_path.name}")
         try:
             with self._open_mega_page() as page:
                 return self._upload_single_file(page, file_path)
         except Exception as e:
-            print(f"[エラー] Playwrightによるアップロード失敗: {e}")
+            logger.error(f"Playwrightによるアップロード失敗: {e}")
             return False
 
     def upload_files(self, file_paths: list[Path]) -> list[Path]:
@@ -95,20 +102,20 @@ class MegaUploader:
             アップロードに成功したファイルのパスリスト
         """
         if not file_paths:
-            print("[情報] アップロードするファイルがありません")
+            logger.info("アップロードするファイルがありません")
             return []
 
-        print(f"[開始] {len(file_paths)}件のファイルをアップロードします")
+        logger.info(f"{len(file_paths)}件のファイルをアップロードします")
         uploaded_files: list[Path] = []
 
         try:
             with self._open_mega_page() as page:
                 for i, file_path in enumerate(file_paths, 1):
-                    print(f"[進捗] {i}/{len(file_paths)} - {file_path.name}")
+                    logger.info(f"進捗: {i}/{len(file_paths)} - {file_path.name}")
                     if self._upload_single_file(page, file_path):
                         uploaded_files.append(file_path)
         except Exception as e:
-            print(f"[エラー] Playwrightによるアップロード失敗: {e}")
+            logger.error(f"Playwrightによるアップロード失敗: {e}")
 
-        print(f"[完了] {len(uploaded_files)}/{len(file_paths)}件のファイルをアップロードしました")
+        logger.info(f"{len(uploaded_files)}/{len(file_paths)}件のファイルをアップロードしました")
         return uploaded_files

@@ -1,11 +1,14 @@
+import logging
 import threading
 import time
 from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
 
-from utils.config_manager import get_batch_delay, get_mega_url, get_rename_pattern, get_wait_time
 from service.mega_uploader import MegaUploader
+from utils.config_manager import get_batch_delay, get_mega_url, get_rename_pattern, get_wait_time
+
+logger = logging.getLogger(__name__)
 
 
 class FileUploadHandler(FileSystemEventHandler):
@@ -50,13 +53,13 @@ class FileUploadHandler(FileSystemEventHandler):
         filename = path.stem
 
         if self.should_process(filename):
-            print(f"[検知] 対象ファイルが見つかりました: {filename}")
+            logger.info(f"対象ファイルが見つかりました: {filename}")
 
             with self._lock:
                 # 既にキューにある場合は追加しない
                 if path not in self._pending_files:
                     self._pending_files.append(path)
-                    print(f"[キュー追加] 現在{len(self._pending_files)}件のファイルが待機中")
+                    logger.info(f"現在{len(self._pending_files)}件のファイルが待機中")
 
                 # タイマーをリセット（新しいファイルが来たら処理開始を遅延）
                 self._reset_timer()
@@ -78,7 +81,7 @@ class FileUploadHandler(FileSystemEventHandler):
             files_to_process = self._pending_files.copy()
             self._pending_files.clear()
 
-        print(f"[バッチ処理開始] {len(files_to_process)}件のファイルを処理します")
+        logger.info(f"バッチ処理開始: {len(files_to_process)}件のファイルを処理します")
 
         # 複数ファイルを一括アップロード
         uploaded_files = self.uploader.upload_files(files_to_process)
@@ -90,21 +93,21 @@ class FileUploadHandler(FileSystemEventHandler):
         # 処理結果のサマリーを表示
         failed_count = len(files_to_process) - len(uploaded_files)
         if failed_count > 0:
-            print(f"[警告] {failed_count}件のファイルがアップロードに失敗しました")
+            logger.warning(f"{failed_count}件のファイルがアップロードに失敗しました")
 
     def _delete_uploaded_files(self, files: list[Path]):
         """アップロード完了したファイルを削除"""
-        print(f"[削除開始] {len(files)}件のファイルを削除します")
+        logger.info(f"{len(files)}件のファイルを削除します")
 
         for file_path in files:
             try:
                 if file_path.exists():
                     file_path.unlink()
-                    print(f"[削除完了] {file_path.name}")
+                    logger.info(f"削除完了: {file_path.name}")
             except Exception as e:
-                print(f"[削除失敗] {file_path.name}: {e}")
+                logger.error(f"削除失敗: {file_path.name}: {e}")
 
-        print(f"[削除完了] すべてのファイルの削除処理が完了しました")
+        logger.info("すべてのファイルの削除処理が完了しました")
 
     def should_process(self, filename: str) -> bool:
         """ファイル名が処理対象かどうかを判定"""
@@ -127,19 +130,19 @@ class FileUploadHandler(FileSystemEventHandler):
         if not dir_path.exists():
             return
 
-        print(f"[スキャン] 既存ファイルを確認しています: {directory}")
+        logger.info(f"既存ファイルを確認しています: {directory}")
 
         found_count = 0
         for file_path in dir_path.iterdir():
             if file_path.is_file() and self.should_process(file_path.stem):
-                print(f"[検知] 既存の対象ファイルが見つかりました: {file_path.name}")
+                logger.info(f"既存の対象ファイルが見つかりました: {file_path.name}")
                 with self._lock:
                     if file_path not in self._pending_files:
                         self._pending_files.append(file_path)
                         found_count += 1
 
         if found_count > 0:
-            print(f"[スキャン完了] {found_count}件の既存ファイルをキューに追加しました")
+            logger.info(f"{found_count}件の既存ファイルをキューに追加しました")
             self._reset_timer()
         else:
-            print("[スキャン完了] 処理対象の既存ファイルはありませんでした")
+            logger.info("処理対象の既存ファイルはありませんでした")
