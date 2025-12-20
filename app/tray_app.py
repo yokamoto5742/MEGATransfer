@@ -30,7 +30,7 @@ class TrayApp:
             sys.exit(1)
 
     def _create_icon_image(self) -> Image.Image:
-        """タスクトレイ用のアイコン画像を作成"""
+        """タスクトレイ用アイコン画像を作成"""
         size = 64
         image = Image.new('RGBA', (size, size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
@@ -113,6 +113,5 @@ class TrayApp:
         )
 
         logger.info("タスクトレイに常駐しています")
-        logger.info("終了するにはタスクトレイアイコンを右クリック→「終了」")
 
         self.icon.run()

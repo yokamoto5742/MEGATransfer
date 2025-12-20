@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class FileUploadHandler(FileSystemEventHandler):
-    """ファイルシステムイベントを処理するハンドラー"""
+    """ファイルをMEGAにアップロードするハンドラー"""
 
     def __init__(self):
         super().__init__()
@@ -42,7 +42,7 @@ class FileUploadHandler(FileSystemEventHandler):
         self._add_to_queue(event.dest_path)
 
     def _add_to_queue(self, file_path: str):
-        """ファイルをキューに追加し、バッチ処理タイマーをリセット"""
+        """ファイルをキューに追加しバッチ処理タイマーをリセット"""
         # ファイル書き込み完了を待つ
         time.sleep(self.wait_time)
 
@@ -129,8 +129,6 @@ class FileUploadHandler(FileSystemEventHandler):
         dir_path = Path(directory)
         if not dir_path.exists():
             return
-
-        logger.info(f"既存ファイルを確認しています: {directory}")
 
         found_count = 0
         for file_path in dir_path.iterdir():
