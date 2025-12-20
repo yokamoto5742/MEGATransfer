@@ -8,7 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    # ログシステムの初期化
     setup_logging()
 
     try:

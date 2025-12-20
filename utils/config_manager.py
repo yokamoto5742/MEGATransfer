@@ -66,11 +66,7 @@ def get_mega_url() -> str:
 
 
 def get_rename_pattern() -> re.Pattern:
-    """ファイル名変換用の正規表現パターンを取得
-
-    パターンはファイル名（stem）の末尾にマッチする
-    $がない場合は自動的に末尾マッチとして扱う
-    """
+    """ファイル名変換用の正規表現パターンを取得"""
     config = load_config()
     # config.iniの [filename] セクションを優先的に読み込む
     pattern_str = config.get('filename', 'pattern', fallback=None)
@@ -127,4 +123,3 @@ def get_post_upload_wait() -> float:
     """アップロード完了後の待機時間を取得（秒）"""
     config = load_config()
     return config.getfloat('Uploader', 'post_upload_wait', fallback=3.0)
-

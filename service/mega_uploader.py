@@ -31,7 +31,7 @@ class MegaUploader:
 
     @contextmanager
     def _open_mega_page(self) -> Generator[Page, None, None]:
-        """ブラウザを起動しMEGAページを開く"""
+        """Chromeブラウザを起動しMEGAページを開く"""
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
             page = browser.new_page()
@@ -40,15 +40,13 @@ class MegaUploader:
             try:
                 yield page
             finally:
-                logger.debug("ブラウザを閉じます")
                 browser.close()
                 logger.debug("ブラウザを閉じました")
 
     def _wait_for_upload_complete(self, page: Page) -> bool:
-        """「アップロード済み」が表示されるまで待機"""
+        """指定したアップロード済み表示がなされるまで待機"""
         elapsed = 0.0
         while elapsed < self.max_wait_time:
-            # ページ内に「アップロード済み」が存在するか確認
             if page.locator(f"text={self.upload_complete_text}").count() > 0:
                 logger.debug(f"「{self.upload_complete_text}」を検出しました（経過時間: {elapsed}秒）")
                 return True
@@ -69,10 +67,8 @@ class MegaUploader:
                 file_input.set_input_files(str(file_path))
                 logger.debug("ファイルを選択しました")
 
-                # 「アップロード済み」表示を待機
                 if self._wait_for_upload_complete(page):
                     logger.info(f"アップロード完了: {file_path.name}")
-                    # アップロード完了後に待機
                     logger.debug(f"アップロード完了後の待機開始: {self.post_upload_wait}秒")
                     time.sleep(self.post_upload_wait)
                     logger.debug("アップロード完了後の待機終了")
@@ -89,7 +85,7 @@ class MegaUploader:
             return False
 
     def upload_file(self, file_path: Path) -> bool:
-        """指定されたファイルをMEGAにアップロードする（単一ファイル用）"""
+        """指定された単一ファイルをMEGAにアップロードする"""
         logger.info(f"MEGAへの接続: {file_path.name}")
         try:
             with self._open_mega_page() as page:
