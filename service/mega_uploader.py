@@ -27,6 +27,7 @@ class MegaUploader:
         self.check_interval = get_check_interval()
         self.headless = get_headless()
         self.post_upload_wait = get_post_upload_wait()
+        logger.debug(f"MegaUploader初期化: post_upload_wait={self.post_upload_wait}秒")
 
     @contextmanager
     def _open_mega_page(self) -> Generator[Page, None, None]:
@@ -39,7 +40,9 @@ class MegaUploader:
             try:
                 yield page
             finally:
+                logger.debug("ブラウザを閉じます")
                 browser.close()
+                logger.debug("ブラウザを閉じました")
 
     def _wait_for_upload_complete(self, page: Page) -> bool:
         """「アップロード済み」が表示されるまで待機"""
@@ -47,9 +50,11 @@ class MegaUploader:
         while elapsed < self.max_wait_time:
             # ページ内に「アップロード済み」が存在するか確認
             if page.locator(f"text={self.upload_complete_text}").count() > 0:
+                logger.debug(f"「{self.upload_complete_text}」を検出しました（経過時間: {elapsed}秒）")
                 return True
             time.sleep(self.check_interval)
             elapsed += self.check_interval
+        logger.debug(f"「{self.upload_complete_text}」の検出がタイムアウトしました（経過時間: {elapsed}秒）")
         return False
 
     def _upload_single_file(self, page: Page, file_path: Path) -> bool:
@@ -68,7 +73,9 @@ class MegaUploader:
                 if self._wait_for_upload_complete(page):
                     logger.info(f"アップロード完了: {file_path.name}")
                     # アップロード完了後に待機
+                    logger.debug(f"アップロード完了後の待機開始: {self.post_upload_wait}秒")
                     time.sleep(self.post_upload_wait)
+                    logger.debug("アップロード完了後の待機終了")
                     return True
                 else:
                     logger.warning(f"完了確認がタイムアウトしました: {file_path.name}")
