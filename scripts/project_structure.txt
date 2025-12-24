@@ -1,7 +1,7 @@
 ============================================================
 プロジェクト構造: MEGATransfer
 パス: C:\Users\yokam\PycharmProjects\MEGATransfer
-生成日時: 2025-12-20 19:09:18
+生成日時: 2025-12-24 17:06:53
 ============================================================
 
 └── MEGATransfer
@@ -10,6 +10,7 @@
     │   └── tray_app.py
     ├── docs
     │   ├── README.md
+    │   ├── CHANGELOG.md
     │   └── LICENSE
     ├── scripts
     │   ├── __init__.py
