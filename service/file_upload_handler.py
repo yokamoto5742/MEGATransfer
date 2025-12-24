@@ -33,13 +33,13 @@ class FileUploadHandler(FileSystemEventHandler):
         """新規ファイル作成時の処理"""
         if event.is_directory:
             return
-        self._add_to_queue(event.src_path)
+        self._add_to_queue(str(event.src_path))
 
     def on_moved(self, event):
         """フォルダに移動されてきたファイルの処理"""
         if event.is_directory:
             return
-        self._add_to_queue(event.dest_path)
+        self._add_to_queue(str(event.dest_path))
 
     def _add_to_queue(self, file_path: str):
         """ファイルをキューに追加しバッチ処理タイマーをリセット"""

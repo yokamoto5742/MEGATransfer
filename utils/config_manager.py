@@ -8,7 +8,7 @@ from typing import Any
 def get_config_path():
     if getattr(sys, 'frozen', False):
         # PyInstallerでビルドされた実行ファイルの場合
-        base_path = sys._MEIPASS
+        base_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
     else:
         # 通常のPythonスクリプトとして実行される場合
         base_path = os.path.dirname(__file__)
@@ -69,7 +69,10 @@ def get_rename_pattern() -> re.Pattern:
     """ファイル名変換用の正規表現パターンを取得"""
     config = load_config()
     # config.iniの [filename] セクションを優先的に読み込む
-    pattern_str = config.get('filename', 'pattern', fallback=None)
+    pattern_str = config.get('filename', 'pattern', fallback='')
+
+    if not pattern_str:
+        raise ValueError("パターンが設定されていません")
 
     # パターンが$で終わっていない場合は末尾マッチとして$を追加
     if not pattern_str.endswith('$'):
