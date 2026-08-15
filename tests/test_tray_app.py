@@ -170,6 +170,7 @@ class TestTrayAppWatching:
                 observer_instance = mock_observer.return_value
                 observer_instance.schedule.assert_called_once()
                 observer_instance.start.assert_called_once()
+                mock_handler_instance.cleanup_uploaded_dir.assert_called_once()
                 mock_handler_instance.scan_existing_files.assert_called_once_with(r'C:\test\src')
                 assert "フォルダ監視を開始しました" in caplog.text
 

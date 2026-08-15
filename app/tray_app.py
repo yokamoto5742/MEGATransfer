@@ -83,6 +83,9 @@ class TrayApp:
         """ファイル監視を開始"""
         event_handler = FileUploadHandler()
 
+        # 起動時に保管先の古いファイルを削除
+        event_handler.cleanup_uploaded_dir()
+
         # 起動時に既存ファイルをスキャンして処理
         event_handler.scan_existing_files(self.src_dir)
 

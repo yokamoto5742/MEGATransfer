@@ -1,4 +1,5 @@
 import logging
+import os
 import shutil
 import threading
 import time
@@ -12,6 +13,7 @@ from utils.config_manager import (
     get_mega_url,
     get_rename_pattern,
     get_uploaded_dir,
+    get_uploaded_retention_hours,
     get_wait_time,
 )
 
@@ -27,6 +29,7 @@ class FileUploadHandler(FileSystemEventHandler):
         self.wait_time = get_wait_time()
         self.batch_delay = get_batch_delay()
         self.uploaded_dir = Path(get_uploaded_dir())
+        self.retention_hours = get_uploaded_retention_hours()
 
         # MEGAアップローダーの初期化
         mega_url = get_mega_url()
@@ -97,6 +100,7 @@ class FileUploadHandler(FileSystemEventHandler):
         # アップロードに成功したファイルを保管先へ移動
         if uploaded_files:
             self._move_uploaded_files(uploaded_files)
+            self.cleanup_uploaded_dir()
 
         # 処理結果のサマリーを表示
         failed_count = len(files_to_process) - len(uploaded_files)
@@ -118,6 +122,8 @@ class FileUploadHandler(FileSystemEventHandler):
                 if file_path.exists():
                     destination = self._resolve_destination(file_path.name)
                     shutil.move(str(file_path), str(destination))
+                    # 保管時刻を基準に削除するため更新日時を現在時刻にする
+                    os.utime(destination, None)
                     logger.info(f"移動完了: {file_path.name} -> {destination}")
             except Exception as e:
                 logger.error(f"移動失敗: {file_path.name}: {e}")
@@ -136,6 +142,27 @@ class FileUploadHandler(FileSystemEventHandler):
             destination = self.uploaded_dir / f"{name.stem}_{counter}{name.suffix}"
             counter += 1
         return destination
+
+    def cleanup_uploaded_dir(self):
+        """保管先の保持時間を過ぎたファイルを削除"""
+        if not self.uploaded_dir.exists():
+            return
+
+        threshold = time.time() - self.retention_hours * 3600
+        deleted_count = 0
+
+        for file_path in self.uploaded_dir.iterdir():
+            if not file_path.is_file():
+                continue
+            try:
+                if file_path.stat().st_mtime < threshold:
+                    file_path.unlink()
+                    deleted_count += 1
+            except OSError as e:
+                logger.error(f"保管ファイルの削除に失敗しました: {file_path.name}: {e}")
+
+        if deleted_count > 0:
+            logger.info(f"{deleted_count}件の保管ファイルを削除しました")
 
     def should_process(self, filename: str) -> bool:
         """ファイル名が処理対象かどうかを判定"""

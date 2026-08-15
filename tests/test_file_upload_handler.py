@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import threading
 import time
@@ -18,12 +19,14 @@ def mock_config(tmp_path):
          patch('service.file_upload_handler.get_wait_time') as mock_wait, \
          patch('service.file_upload_handler.get_batch_delay') as mock_batch, \
          patch('service.file_upload_handler.get_uploaded_dir') as mock_uploaded_dir, \
+         patch('service.file_upload_handler.get_uploaded_retention_hours') as mock_retention, \
          patch('service.file_upload_handler.get_mega_url') as mock_url:
 
         mock_pattern.return_value = re.compile(r'test.*$')
         mock_wait.return_value = 0.1
         mock_batch.return_value = 0.2
         mock_uploaded_dir.return_value = str(tmp_path / "_uploaded")
+        mock_retention.return_value = 4.0
         mock_url.return_value = 'https://mega.nz/test'
 
         yield {
@@ -31,6 +34,7 @@ def mock_config(tmp_path):
             'wait_time': mock_wait,
             'batch_delay': mock_batch,
             'uploaded_dir': mock_uploaded_dir,
+            'retention_hours': mock_retention,
             'mega_url': mock_url
         }
 
@@ -61,6 +65,7 @@ class TestFileUploadHandlerInit:
         assert handler.pattern == mock_config['pattern'].return_value
         assert handler.wait_time == 0.1
         assert handler.batch_delay == 0.2
+        assert handler.retention_hours == 4.0
         assert handler.uploader == mock_uploader
 
     def test_init_creates_empty_queue(self, handler):
@@ -382,6 +387,101 @@ class TestFileUploadHandlerMoveUploadedFiles:
 
                 assert "保管先ディレクトリを作成できませんでした" in caplog.text
                 assert test_file.exists()
+
+
+class TestFileUploadHandlerCleanupUploadedDir:
+    """保管先クリーンアップのテスト"""
+
+    def _create_aged_file(self, directory: Path, filename: str, hours_ago: float) -> Path:
+        """指定時間前の更新日時を持つファイルを作成"""
+        directory.mkdir(parents=True, exist_ok=True)
+        file_path = directory / filename
+        file_path.write_text("content")
+        aged = time.time() - hours_ago * 3600
+        os.utime(file_path, (aged, aged))
+        return file_path
+
+    def test_cleanup_deletes_expired_files(self, handler, caplog):
+        """保持時間を過ぎたファイルは削除される"""
+        expired = self._create_aged_file(handler.uploaded_dir, "old.txt", 5)
+
+        with caplog.at_level(logging.INFO):
+            handler.cleanup_uploaded_dir()
+
+            assert not expired.exists()
+            assert "1件の保管ファイルを削除しました" in caplog.text
+
+    def test_cleanup_keeps_recent_files(self, handler):
+        """保持時間内のファイルは残る"""
+        recent = self._create_aged_file(handler.uploaded_dir, "new.txt", 1)
+
+        handler.cleanup_uploaded_dir()
+
+        assert recent.exists()
+
+    def test_cleanup_mixed_files(self, handler):
+        """期限切れのファイルのみ削除される"""
+        expired = self._create_aged_file(handler.uploaded_dir, "old.txt", 10)
+        recent = self._create_aged_file(handler.uploaded_dir, "new.txt", 0.5)
+
+        handler.cleanup_uploaded_dir()
+
+        assert not expired.exists()
+        assert recent.exists()
+
+    def test_cleanup_ignores_subdirectories(self, handler):
+        """サブディレクトリは削除対象外"""
+        handler.uploaded_dir.mkdir(parents=True)
+        sub_dir = handler.uploaded_dir / "sub"
+        sub_dir.mkdir()
+        aged = time.time() - 10 * 3600
+        os.utime(sub_dir, (aged, aged))
+
+        handler.cleanup_uploaded_dir()
+
+        assert sub_dir.exists()
+
+    def test_cleanup_without_uploaded_dir(self, handler):
+        """保管先が存在しない場合は何もしない"""
+        assert not handler.uploaded_dir.exists()
+
+        handler.cleanup_uploaded_dir()
+
+    def test_cleanup_delete_error_continues(self, handler, caplog):
+        """削除失敗時はログ出力して他のファイルの処理を続ける"""
+        self._create_aged_file(handler.uploaded_dir, "old1.txt", 10)
+        self._create_aged_file(handler.uploaded_dir, "old2.txt", 10)
+
+        with patch.object(Path, 'unlink', side_effect=OSError("Access denied")):
+            with caplog.at_level(logging.ERROR):
+                handler.cleanup_uploaded_dir()
+
+                assert caplog.text.count("保管ファイルの削除に失敗しました") == 2
+
+    def test_process_pending_files_runs_cleanup(self, handler, tmp_path):
+        """アップロード完了後にクリーンアップが実行される"""
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("content")
+
+        handler._pending_files = [test_file]
+        handler.uploader.upload_files.return_value = [test_file]
+
+        with patch.object(handler, 'cleanup_uploaded_dir') as mock_cleanup:
+            handler._process_pending_files()
+
+            mock_cleanup.assert_called_once()
+
+    def test_move_uploaded_files_refreshes_mtime(self, handler, tmp_path):
+        """移動したファイルの更新日時が現在時刻になる"""
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("content")
+        aged = time.time() - 10 * 3600
+        os.utime(test_file, (aged, aged))
+
+        handler._move_uploaded_files([test_file])
+
+        destination = handler.uploaded_dir / "test_file.txt"
+        assert time.time() - destination.stat().st_mtime < 60
 
 
 class TestFileUploadHandlerGetPendingCount:

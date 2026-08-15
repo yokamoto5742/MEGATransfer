@@ -43,6 +43,11 @@ python build.py            # PyInstallerによるWindows実行ファイルのビ
   config.iniの `[Paths] uploaded_dir`。未設定の場合は `src_dir` 配下の `_uploaded` になります。
   共用端末では他ユーザーから見えない場所を指定してください。移動先に同名ファイルがある場合は
   連番を付けて衝突を避けます。
+- **保管先のファイルは自動削除される**（`cleanup_uploaded_dir`）: config.iniの
+  `[App] uploaded_retention_hours`（デフォルト4時間）を過ぎたファイルを、アプリ起動時と
+  アップロード完了後に削除します。判定は更新日時（mtime）で、`_move_uploaded_files` が移動直後に
+  `os.utime` でmtimeを現在時刻へ更新するため「保管してからの経過時間」が基準になります。
+  サブディレクトリは対象外です。
 - **アップロード完了は「テキストの有無」では判定できない**（`_read_completed_count`）: MEGAは
   ファイル選択直後に「0/1ファイルをアップロード済み」と表示するため、`アップロード済み` の
   部分一致は送信開始時点で必ずヒットします。個別行の `アップロード済み` 表示も実際の完了より

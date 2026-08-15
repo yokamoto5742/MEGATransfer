@@ -106,6 +106,12 @@ def get_batch_delay() -> float:
     return config.getfloat('App', 'batch_delay', fallback=3.0)
 
 
+def get_uploaded_retention_hours() -> float:
+    """アップロード済みファイルを保管先に残す時間を取得（時間）"""
+    config = load_config()
+    return config.getfloat('App', 'uploaded_retention_hours', fallback=4.0)
+
+
 def get_upload_complete_text() -> str:
     """アップロード完了を示すテキストを取得"""
     config = load_config()

@@ -74,6 +74,8 @@ pattern = _magnate
 wait_time = 0.5
 # バッチ処理開始までの待機時間（秒）
 batch_delay = 3.0
+# アップロード済みファイルを保管先に残す時間（時間）
+uploaded_retention_hours = 4
 
 [Uploader]
 # MEGAのアップロード完了を示すテキスト
