@@ -144,54 +144,121 @@ class TestMegaUploaderOpenMegaPage:
             mock_playwright['instance'].chromium.launch.assert_called_once_with(headless=False)
 
 
+def set_progress_texts(mock_page, *texts_per_call):
+    """完了件数表示のテキストを呼び出しごとに切り替えるモックを設定"""
+    mock_locator = MagicMock()
+    mock_locator.all_text_contents.side_effect = list(texts_per_call)
+    mock_page.locator.return_value = mock_locator
+    return mock_locator
+
+
+class TestMegaUploaderReadCompletedCount:
+    """完了件数の読み取りテスト"""
+
+    def test_read_completed_count_parses_number(self, uploader, mock_playwright):
+        """「N/Mファイルをアップロード済み」から完了件数を読み取る"""
+        mock_page = mock_playwright['page']
+        set_progress_texts(mock_page, ['2/3ファイルをアップロード済み'])
+
+        assert uploader._read_completed_count(mock_page) == 2
+        mock_page.locator.assert_called_with("text=アップロード済み")
+
+    def test_read_completed_count_ignores_text_without_number(self, uploader, mock_playwright):
+        """件数を含まない要素は無視して件数表示のみを読む"""
+        mock_page = mock_playwright['page']
+        set_progress_texts(mock_page, ['アップロード済み', '1/1ファイルをアップロード済み'])
+
+        assert uploader._read_completed_count(mock_page) == 1
+
+    def test_read_completed_count_no_match(self, uploader, mock_playwright):
+        """一致する表示がない場合はNoneを返す"""
+        mock_page = mock_playwright['page']
+        set_progress_texts(mock_page, [])
+
+        assert uploader._read_completed_count(mock_page) is None
+
+
 class TestMegaUploaderWaitForUploadComplete:
     """アップロード完了待機のテスト"""
 
     def test_wait_for_upload_complete_success(self, uploader, mock_playwright, caplog):
-        """アップロード完了テキストが検出される"""
+        """完了件数の増加を検出する"""
         mock_page = mock_playwright['page']
-        mock_locator = MagicMock()
-        mock_locator.count.return_value = 1
-        mock_page.locator.return_value = mock_locator
+        set_progress_texts(mock_page, ['1/1ファイルをアップロード済み'])
 
-        with caplog.at_level(logging.DEBUG):
-            result = uploader._wait_for_upload_complete(mock_page)
+        with patch('time.sleep'):
+            with caplog.at_level(logging.DEBUG):
+                result = uploader._wait_for_upload_complete(mock_page, 0)
 
-            assert result is True
-            mock_page.locator.assert_called_with("text=アップロード済み")
-            assert "「アップロード済み」を検出しました" in caplog.text
+                assert result is True
+                assert "完了件数が0件から1件になりました" in caplog.text
+
+    def test_wait_for_upload_complete_ignores_zero_completed(self, uploader, mock_playwright, caplog):
+        """「0/1ファイルをアップロード済み」を完了とみなさない"""
+        uploader.max_wait_time = 1.0
+        uploader.check_interval = 0.5
+
+        mock_page = mock_playwright['page']
+        set_progress_texts(
+            mock_page,
+            ['0/1ファイルをアップロード済み'],
+            ['0/1ファイルをアップロード済み'],
+        )
+
+        with patch('time.sleep'):
+            with caplog.at_level(logging.DEBUG):
+                result = uploader._wait_for_upload_complete(mock_page, 0)
+
+                assert result is False
+                assert "完了件数の増加を検出できませんでした" in caplog.text
+
+    def test_wait_for_upload_complete_uses_baseline(self, uploader, mock_playwright):
+        """基準値と同じ件数では完了とみなさない"""
+        uploader.max_wait_time = 1.0
+        uploader.check_interval = 0.5
+
+        mock_page = mock_playwright['page']
+        set_progress_texts(
+            mock_page,
+            ['1/2ファイルをアップロード済み'],
+            ['2/2ファイルをアップロード済み'],
+        )
+
+        with patch('time.sleep'):
+            assert uploader._wait_for_upload_complete(mock_page, 1) is True
 
     def test_wait_for_upload_complete_timeout(self, uploader, mock_playwright, caplog):
-        """タイムアウトまで検出されない"""
+        """件数表示が現れないままタイムアウトする"""
         uploader.max_wait_time = 1.0
-        uploader.check_interval = 0.3
+        uploader.check_interval = 0.5
 
         mock_page = mock_playwright['page']
-        mock_locator = MagicMock()
-        mock_locator.count.return_value = 0
-        mock_page.locator.return_value = mock_locator
+        set_progress_texts(mock_page, [], [])
 
-        with caplog.at_level(logging.DEBUG):
-            result = uploader._wait_for_upload_complete(mock_page)
+        with patch('time.sleep'):
+            with caplog.at_level(logging.DEBUG):
+                result = uploader._wait_for_upload_complete(mock_page, 0)
 
-            assert result is False
-            assert "検出がタイムアウトしました" in caplog.text
+                assert result is False
+                assert "完了件数の増加を検出できませんでした" in caplog.text
 
     def test_wait_for_upload_complete_delayed_detection(self, uploader, mock_playwright):
         """複数回チェック後に検出される"""
         uploader.check_interval = 0.1
 
         mock_page = mock_playwright['page']
-        mock_locator = MagicMock()
-        # 3回目で検出される
-        mock_locator.count.side_effect = [0, 0, 1]
-        mock_page.locator.return_value = mock_locator
+        mock_locator = set_progress_texts(
+            mock_page,
+            ['0/1ファイルをアップロード済み'],
+            ['0/1ファイルをアップロード済み'],
+            ['1/1ファイルをアップロード済み'],
+        )
 
         with patch('time.sleep'):
-            result = uploader._wait_for_upload_complete(mock_page)
+            result = uploader._wait_for_upload_complete(mock_page, 0)
 
             assert result is True
-            assert mock_locator.count.call_count == 3
+            assert mock_locator.all_text_contents.call_count == 3
 
     def test_wait_for_upload_complete_respects_check_interval(self, uploader, mock_playwright):
         """チェック間隔が正しく使用される"""
@@ -200,11 +267,11 @@ class TestMegaUploaderWaitForUploadComplete:
 
         mock_page = mock_playwright['page']
         mock_locator = MagicMock()
-        mock_locator.count.return_value = 0
+        mock_locator.all_text_contents.return_value = []
         mock_page.locator.return_value = mock_locator
 
         with patch('time.sleep') as mock_sleep:
-            uploader._wait_for_upload_complete(mock_page)
+            uploader._wait_for_upload_complete(mock_page, 0)
 
             # sleep が check_interval で呼ばれることを確認
             for call_args in mock_sleep.call_args_list:
@@ -522,11 +589,10 @@ class TestMegaUploaderEdgeCases:
         uploader = MegaUploader('https://mega.nz/test')
 
         mock_page = mock_playwright['page']
-        mock_locator = MagicMock()
-        mock_locator.count.return_value = 1
-        mock_page.locator.return_value = mock_locator
+        set_progress_texts(mock_page, ['1/1 files Upload Complete'])
 
-        result = uploader._wait_for_upload_complete(mock_page)
+        with patch('time.sleep'):
+            result = uploader._wait_for_upload_complete(mock_page, 0)
 
         assert result is True
         mock_page.locator.assert_called_with("text=Upload Complete")
@@ -537,11 +603,10 @@ class TestMegaUploaderEdgeCases:
         uploader = MegaUploader('https://mega.nz/test')
 
         mock_page = mock_playwright['page']
-        mock_locator = MagicMock()
-        mock_locator.count.return_value = 1
-        mock_page.locator.return_value = mock_locator
+        set_progress_texts(mock_page, ['1/1ファイルをアップロード済み'])
 
-        result = uploader._wait_for_upload_complete(mock_page)
+        with patch('time.sleep'):
+            result = uploader._wait_for_upload_complete(mock_page, 0)
 
         assert result is True
 
@@ -551,11 +616,10 @@ class TestMegaUploaderEdgeCases:
         uploader = MegaUploader('https://mega.nz/test')
 
         mock_page = mock_playwright['page']
-        mock_locator = MagicMock()
-        mock_locator.count.return_value = 1
-        mock_page.locator.return_value = mock_locator
+        set_progress_texts(mock_page, ['1/1ファイルをアップロード済み'])
 
-        result = uploader._wait_for_upload_complete(mock_page)
+        with patch('time.sleep'):
+            result = uploader._wait_for_upload_complete(mock_page, 0)
 
         assert result is True
 

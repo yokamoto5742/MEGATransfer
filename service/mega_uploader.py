@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -43,16 +44,29 @@ class MegaUploader:
                 browser.close()
                 logger.debug("ブラウザを閉じました")
 
-    def _wait_for_upload_complete(self, page: Page) -> bool:
-        """指定したアップロード済み表示がなされるまで待機"""
+    def _read_completed_count(self, page: Page) -> int | None:
+        """「N/Mファイルをアップロード済み」表示から完了件数Nを読み取る"""
+        for text in page.locator(f"text={self.upload_complete_text}").all_text_contents():
+            matched = re.search(r"(\d+)\s*/\s*(\d+)", text)
+            if matched:
+                return int(matched.group(1))
+        return None
+
+    def _wait_for_upload_complete(self, page: Page, completed_before: int) -> bool:
+        """完了件数が completed_before より増えるまで待機
+
+        ファイル選択直後に「0/1ファイルをアップロード済み」が表示されるため、
+        テキストの有無では判定できない。件数の増加のみを完了とみなす。
+        """
         elapsed = 0.0
         while elapsed < self.max_wait_time:
-            if page.locator(f"text={self.upload_complete_text}").count() > 0:
-                logger.debug(f"「{self.upload_complete_text}」を検出しました（経過時間: {elapsed}秒）")
-                return True
             time.sleep(self.check_interval)
             elapsed += self.check_interval
-        logger.debug(f"「{self.upload_complete_text}」の検出がタイムアウトしました（経過時間: {elapsed}秒）")
+            completed = self._read_completed_count(page)
+            if completed is not None and completed > completed_before:
+                logger.debug(f"完了件数が{completed_before}件から{completed}件になりました（経過時間: {elapsed:.1f}秒）")
+                return True
+        logger.debug(f"完了件数の増加を検出できませんでした（経過時間: {elapsed:.1f}秒）")
         return False
 
     def _upload_single_file(self, page: Page, file_path: Path) -> bool:
@@ -64,10 +78,12 @@ class MegaUploader:
             file_input = page.locator('input[type="file"]')
 
             if file_input.count() > 0:
+                # 選択前の完了件数を基準にしないと、他ファイルの完了表示を誤検出する
+                completed_before = self._read_completed_count(page) or 0
                 file_input.set_input_files(str(file_path))
-                logger.debug("ファイルを選択しました")
+                logger.debug(f"ファイルを選択しました（完了件数の基準: {completed_before}件）")
 
-                if self._wait_for_upload_complete(page):
+                if self._wait_for_upload_complete(page, completed_before):
                     logger.info(f"アップロード完了: {file_path.name}")
                     logger.debug(f"アップロード完了後の待機開始: {self.post_upload_wait}秒")
                     time.sleep(self.post_upload_wait)

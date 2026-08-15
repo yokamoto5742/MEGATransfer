@@ -39,8 +39,15 @@ python build.py            # PyInstallerによるWindows実行ファイルのビ
 - **ファイル名マッチングはサフィックスベース**: `get_rename_pattern()` はconfig.iniの
   `[filename] pattern` を読み込み、末尾に `$` がなければ自動付与し、ファイル名全体ではなく
   拡張子を除いたステム部分に対してマッチングします。
-- **アップロード後のファイル削除は即座かつ復元不可**（`_delete_uploaded_files`）— バックアップや
-  ごみ箱への退避はありません。
+- **アップロード成功後のファイルは削除ではなく移動される**（`_move_uploaded_files`）: 移動先は
+  config.iniの `[Paths] uploaded_dir`。未設定の場合は `src_dir` 配下の `_uploaded` になります。
+  共用端末では他ユーザーから見えない場所を指定してください。移動先に同名ファイルがある場合は
+  連番を付けて衝突を避けます。
+- **アップロード完了は「テキストの有無」では判定できない**（`_read_completed_count`）: MEGAは
+  ファイル選択直後に「0/1ファイルをアップロード済み」と表示するため、`アップロード済み` の
+  部分一致は送信開始時点で必ずヒットします。個別行の `アップロード済み` 表示も実際の完了より
+  早く出ます（実測で約5秒）。件数表示の `N/M` の `N` が選択前より増えたことのみを完了とみなす
+  必要があります。
 - **`python build.py` の実行には事前にPlaywrightのChromiumがインストールされている必要が
   あります**（`playwright install chromium`）。`~/AppData/Local/ms-playwright` 配下から
   ブラウザを探し、PyInstallerの出力にバンドルします。ブラウザディレクトリが見つからない場合は
