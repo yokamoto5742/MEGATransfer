@@ -15,7 +15,7 @@ MEGATransferは、指定パターンに一致するファイルを監視ディ�
 
 ## 開発コマンド
 
-依存関係は `uv`（`pyproject.toml` + `uv.lock`）で管理しています。`requirements.txt` はありません。
+依存関係は `uv`（`pyproject.toml` + `uv.lock`）で管理しています。
 
 ```bash
 uv sync                    # 依存関係のインストール
