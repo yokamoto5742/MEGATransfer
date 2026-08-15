@@ -3,7 +3,6 @@ import subprocess
 import sys
 
 from pathlib import Path
-from scripts.version_manager import update_version
 
 
 def get_playwright_browsers_path():
@@ -16,7 +15,6 @@ def get_playwright_browsers_path():
 
 
 def build_executable():
-    new_version = update_version()
 
     playwright_browsers_path = get_playwright_browsers_path()
 
@@ -53,9 +51,8 @@ def build_executable():
     print("\nPyInstallerを実行中...")
     subprocess.run(command, check=True)
 
-    print(f"\n[OK] 実行ファイルのビルドが完了しました。バージョン: {new_version}")
-
-    return new_version
+    print(f"\n[OK] 実行ファイルのビルドが完了しました")
+    return None
 
 
 if __name__ == "__main__":

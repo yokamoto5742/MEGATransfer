@@ -288,8 +288,8 @@ PyInstallerを使用して、以下をバンドルした実行ファイルを生
 
 ## ライセンス
 
-このプロジェクトのライセンス情報については、 [LICENSE](./LICENSE) を参照してください。
+このプロジェクトのライセンス情報については、 [LICENSE](docs/LICENSE) を参照してください。
 
 ## 更新履歴
 
-更新履歴は [CHANGELOG.md](./CHANGELOG.md) を参照してください。
+更新履歴は [CHANGELOG.md](docs/CHANGELOG.md) を参照してください。
