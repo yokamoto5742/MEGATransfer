@@ -12,22 +12,25 @@ from service.file_upload_handler import FileUploadHandler
 
 
 @pytest.fixture
-def mock_config():
+def mock_config(tmp_path):
     """設定のモックを提供"""
     with patch('service.file_upload_handler.get_rename_pattern') as mock_pattern, \
          patch('service.file_upload_handler.get_wait_time') as mock_wait, \
          patch('service.file_upload_handler.get_batch_delay') as mock_batch, \
+         patch('service.file_upload_handler.get_uploaded_dir') as mock_uploaded_dir, \
          patch('service.file_upload_handler.get_mega_url') as mock_url:
 
         mock_pattern.return_value = re.compile(r'test.*$')
         mock_wait.return_value = 0.1
         mock_batch.return_value = 0.2
+        mock_uploaded_dir.return_value = str(tmp_path / "_uploaded")
         mock_url.return_value = 'https://mega.nz/test'
 
         yield {
             'pattern': mock_pattern,
             'wait_time': mock_wait,
             'batch_delay': mock_batch,
+            'uploaded_dir': mock_uploaded_dir,
             'mega_url': mock_url
         }
 
@@ -244,8 +247,8 @@ class TestFileUploadHandlerProcessPendingFiles:
 
             handler.uploader.upload_files.assert_not_called()
 
-    def test_process_pending_files_uploads_and_deletes(self, handler, tmp_path):
-        """ファイルをアップロードして削除"""
+    def test_process_pending_files_uploads_and_moves(self, handler, tmp_path):
+        """ファイルをアップロードして保管先へ移動"""
         test_file1 = tmp_path / "test_file1.txt"
         test_file2 = tmp_path / "test_file2.txt"
         test_file1.write_text("content1")
@@ -259,6 +262,8 @@ class TestFileUploadHandlerProcessPendingFiles:
         handler.uploader.upload_files.assert_called_once_with([test_file1, test_file2])
         assert not test_file1.exists()
         assert not test_file2.exists()
+        assert (handler.uploaded_dir / "test_file1.txt").exists()
+        assert (handler.uploaded_dir / "test_file2.txt").exists()
 
     def test_process_pending_files_partial_success(self, handler, tmp_path):
         """一部のファイルのみアップロード成功"""
@@ -303,51 +308,80 @@ class TestFileUploadHandlerProcessPendingFiles:
             assert "1件のファイルがアップロードに失敗しました" in caplog.text
 
 
-class TestFileUploadHandlerDeleteUploadedFiles:
-    """アップロード済みファイル削除のテスト"""
+class TestFileUploadHandlerMoveUploadedFiles:
+    """アップロード済みファイル移動のテスト"""
 
-    def test_delete_uploaded_files_success(self, handler, tmp_path, caplog):
-        """ファイルが正常に削除される"""
+    def test_move_uploaded_files_success(self, handler, tmp_path, caplog):
+        """ファイルが保管先へ移動される"""
         test_file = tmp_path / "test_file.txt"
         test_file.write_text("content")
 
         with caplog.at_level(logging.INFO):
-            handler._delete_uploaded_files([test_file])
+            handler._move_uploaded_files([test_file])
 
             assert not test_file.exists()
-            assert "削除完了" in caplog.text
+            assert (handler.uploaded_dir / "test_file.txt").read_text() == "content"
+            assert "移動完了" in caplog.text
 
-    def test_delete_uploaded_files_multiple(self, handler, tmp_path):
-        """複数ファイルが削除される"""
+    def test_move_uploaded_files_multiple(self, handler, tmp_path):
+        """複数ファイルが移動される"""
         test_file1 = tmp_path / "test_file1.txt"
         test_file2 = tmp_path / "test_file2.txt"
         test_file1.write_text("content1")
         test_file2.write_text("content2")
 
-        handler._delete_uploaded_files([test_file1, test_file2])
+        handler._move_uploaded_files([test_file1, test_file2])
 
         assert not test_file1.exists()
         assert not test_file2.exists()
+        assert (handler.uploaded_dir / "test_file1.txt").exists()
+        assert (handler.uploaded_dir / "test_file2.txt").exists()
 
-    def test_delete_uploaded_files_non_existing(self, handler, caplog):
-        """存在しないファイルの削除を試みてもエラーにならない"""
+    def test_move_uploaded_files_name_collision(self, handler, tmp_path):
+        """保管先に同名ファイルがある場合は連番を付けて保存される"""
+        handler.uploaded_dir.mkdir(parents=True)
+        (handler.uploaded_dir / "test_file.txt").write_text("既存")
+
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("新規")
+
+        handler._move_uploaded_files([test_file])
+
+        assert (handler.uploaded_dir / "test_file.txt").read_text() == "既存"
+        assert (handler.uploaded_dir / "test_file_1.txt").read_text() == "新規"
+
+    def test_move_uploaded_files_non_existing(self, handler, caplog):
+        """存在しないファイルの移動を試みてもエラーにならない"""
         non_existing = Path(r'C:\non_existing\test_file.txt')
 
         with caplog.at_level(logging.INFO):
-            handler._delete_uploaded_files([non_existing])
+            handler._move_uploaded_files([non_existing])
 
-            assert "すべてのファイルの削除処理が完了しました" in caplog.text
+            assert "すべてのファイルの移動処理が完了しました" in caplog.text
 
-    def test_delete_uploaded_files_permission_error(self, handler, tmp_path, caplog):
-        """削除失敗時にログ出力"""
+    def test_move_uploaded_files_permission_error(self, handler, tmp_path, caplog):
+        """移動失敗時はファイルを残してログ出力"""
         test_file = tmp_path / "test_file.txt"
         test_file.write_text("content")
 
-        with patch.object(Path, 'unlink', side_effect=PermissionError("Access denied")):
+        with patch('service.file_upload_handler.shutil.move', side_effect=PermissionError("Access denied")):
             with caplog.at_level(logging.ERROR):
-                handler._delete_uploaded_files([test_file])
+                handler._move_uploaded_files([test_file])
 
-                assert "削除失敗" in caplog.text
+                assert "移動失敗" in caplog.text
+                assert test_file.exists()
+
+    def test_move_uploaded_files_mkdir_error_keeps_files(self, handler, tmp_path, caplog):
+        """保管先を作成できない場合はファイルを残す"""
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("content")
+
+        with patch.object(Path, 'mkdir', side_effect=OSError("Access denied")):
+            with caplog.at_level(logging.ERROR):
+                handler._move_uploaded_files([test_file])
+
+                assert "保管先ディレクトリを作成できませんでした" in caplog.text
+                assert test_file.exists()
 
 
 class TestFileUploadHandlerGetPendingCount:

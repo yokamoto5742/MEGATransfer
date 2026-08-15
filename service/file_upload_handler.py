@@ -1,4 +1,5 @@
 import logging
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -6,7 +7,13 @@ from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 
 from service.mega_uploader import MegaUploader
-from utils.config_manager import get_batch_delay, get_mega_url, get_rename_pattern, get_wait_time
+from utils.config_manager import (
+    get_batch_delay,
+    get_mega_url,
+    get_rename_pattern,
+    get_uploaded_dir,
+    get_wait_time,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +26,7 @@ class FileUploadHandler(FileSystemEventHandler):
         self.pattern = get_rename_pattern()
         self.wait_time = get_wait_time()
         self.batch_delay = get_batch_delay()
+        self.uploaded_dir = Path(get_uploaded_dir())
 
         # MEGAアップローダーの初期化
         mega_url = get_mega_url()
@@ -86,28 +94,48 @@ class FileUploadHandler(FileSystemEventHandler):
         # 複数ファイルを一括アップロード
         uploaded_files = self.uploader.upload_files(files_to_process)
 
-        # アップロードに成功したファイルを削除
+        # アップロードに成功したファイルを保管先へ移動
         if uploaded_files:
-            self._delete_uploaded_files(uploaded_files)
+            self._move_uploaded_files(uploaded_files)
 
         # 処理結果のサマリーを表示
         failed_count = len(files_to_process) - len(uploaded_files)
         if failed_count > 0:
             logger.warning(f"{failed_count}件のファイルがアップロードに失敗しました")
 
-    def _delete_uploaded_files(self, files: list[Path]):
-        """アップロード完了したファイルを削除"""
-        logger.info(f"{len(files)}件のファイルを削除します")
+    def _move_uploaded_files(self, files: list[Path]):
+        """アップロード完了したファイルを保管先へ移動"""
+        logger.info(f"{len(files)}件のファイルを移動します")
+
+        try:
+            self.uploaded_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"保管先ディレクトリを作成できませんでした: {self.uploaded_dir}: {e}")
+            return
 
         for file_path in files:
             try:
                 if file_path.exists():
-                    file_path.unlink()
-                    logger.info(f"削除完了: {file_path.name}")
+                    destination = self._resolve_destination(file_path.name)
+                    shutil.move(str(file_path), str(destination))
+                    logger.info(f"移動完了: {file_path.name} -> {destination}")
             except Exception as e:
-                logger.error(f"削除失敗: {file_path.name}: {e}")
+                logger.error(f"移動失敗: {file_path.name}: {e}")
 
-        logger.info("すべてのファイルの削除処理が完了しました")
+        logger.info("すべてのファイルの移動処理が完了しました")
+
+    def _resolve_destination(self, filename: str) -> Path:
+        """保管先に同名ファイルがある場合は連番を付けて衝突を避ける"""
+        destination = self.uploaded_dir / filename
+        if not destination.exists():
+            return destination
+
+        name = Path(filename)
+        counter = 1
+        while destination.exists():
+            destination = self.uploaded_dir / f"{name.stem}_{counter}{name.suffix}"
+            counter += 1
+        return destination
 
     def should_process(self, filename: str) -> bool:
         """ファイル名が処理対象かどうかを判定"""

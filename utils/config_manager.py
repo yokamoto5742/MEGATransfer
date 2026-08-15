@@ -59,6 +59,14 @@ def get_src_dir() -> str:
     return config.get('Paths', 'src_dir')
 
 
+def get_uploaded_dir() -> str:
+    """アップロード成功後にファイルを移動する保管先ディレクトリパスを取得"""
+    config = load_config()
+    uploaded_dir = config.get('Paths', 'uploaded_dir', fallback='').strip()
+    # 未設定の場合はファイル消失を防ぐため監視ディレクトリ配下に保管する
+    return uploaded_dir or os.path.join(config.get('Paths', 'src_dir'), '_uploaded')
+
+
 def get_mega_url() -> str:
     """MEGAファイルリクエストのURLを取得"""
     config = load_config()
