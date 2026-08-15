@@ -21,20 +21,13 @@ Windows システムトレイアプリケーション。指定ディレクトリ
 
 1. リポジトリをクローンします
 ```bash
-git clone <repository-url>
+git clone https://github.com/yokamoto5742/MEGATransfer
 cd MEGATransfer
 ```
 
 1. 仮想環境を作成し、有効化します
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-```
 
 1. 依存パッケージをインストールします
-```bash
-pip install -r requirements.txt
-```
 
 1. Playwrightブラウザをインストールします
 ```bash
@@ -123,18 +116,8 @@ MEGATransfer/
 │   ├── test_tray_app.py
 │   ├── test_file_upload_handler.py
 │   └── test_mega_uploader.py
-├── scripts/                      # ビルド・管理スクリプト
-│   ├── __init__.py
-│   ├── project_structure.py
-│   └── version_manager.py
-├── docs/                         # ドキュメント
-│   ├── README.md
-│   ├── LICENSE
-│   └── CHANGELOG.md
 ├── main.py                       # エントリーポイント
 ├── build.py                      # 実行ファイルビルドスクリプト
-├── requirements.txt              # 依存パッケージ
-├── pyrightconfig.json            # 型チェック設定
 └── CLAUDE.md                     # Claude Code用開発ガイドライン
 ```
 
@@ -203,19 +186,6 @@ uploaded = uploader.upload_files(files)
 
 ## 開発
 
-### 開発環境のセットアップ
-
-```bash
-# 仮想環境の有効化
-.venv\Scripts\activate
-
-# 開発依存パッケージのインストール
-pip install -r requirements.txt
-
-# Playwrightブラウザのインストール
-playwright install chromium
-```
-
 ### テスト実行
 
 ```bash
@@ -280,11 +250,6 @@ PyInstallerを使用して、以下をバンドルした実行ファイルを生
    ```
 2. Windowsの実行ポリシーを確認
 3. 管理者権限でアプリケーションを実行してみる
-
-## バージョン情報
-
-- **現在のバージョン**: 1.0.0
-- **最終更新日**: 2025年12月24日
 
 ## ライセンス
 
