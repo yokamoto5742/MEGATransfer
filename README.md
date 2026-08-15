@@ -9,6 +9,7 @@ Windows システムトレイアプリケーション。指定ディレクトリ
 - 複数ファイルのバッチ処理に対応
 - システムトレイインテグレーション
 - ファイル名パターンマッチング
+- アップロード完了後ファイルの自動移動・保管と時間経過による自動削除
 - 詳細なログ記録と自動ローテーション
 
 ## 前提条件
@@ -25,22 +26,24 @@ git clone https://github.com/yokamoto5742/MEGATransfer
 cd MEGATransfer
 ```
 
-1. 仮想環境を作成し、有効化します
+2. 依存関係をインストールします（`uv` 使用）
+```bash
+uv sync
+```
 
-1. 依存パッケージをインストールします
-
-1. Playwrightブラウザをインストールします
+3. Playwrightのブラウザをインストールします
 ```bash
 playwright install chromium
 ```
 
-1. 設定ファイルを編集します（`utils/config.ini`）
+4. 設定ファイルを編集します（`utils/config.ini`）
 ```ini
 [URL]
 MEGAfilerequest = <your-mega-file-request-url>
 
 [Paths]
 src_dir = <directory-to-monitor>
+uploaded_dir = <directory-for-uploaded-files>
 
 [filename]
 pattern = <filename-pattern>
@@ -63,7 +66,9 @@ python main.py
 MEGAfilerequest = https://mega.nz/filerequest/xxxxx
 
 [Paths]
-src_dir = C:\Users\yokam\Desktop\Magnate\ファイル転送
+src_dir = C:\Users\yokam\Desktop\target
+# アップロード済みファイルの保管先（未設定時は src_dir/_uploaded）
+uploaded_dir = C:\Users\yokam\Desktop\uploaded
 
 [filename]
 # ファイル名パターン（拡張子を除いたファイル名の末尾にマッチ）
@@ -78,10 +83,10 @@ batch_delay = 3.0
 uploaded_retention_hours = 4
 
 [Uploader]
-# MEGAのアップロード完了を示すテキスト
+# アップロード完了判定用テキスト
 upload_complete_text = アップロード済み
 # 完了チェックの最大待機時間（秒）
-max_wait_time = 30
+max_wait_time = 120
 # 完了チェックの間隔（秒）
 check_interval = 0.5
 # ブラウザをヘッドレスモードで実行するか
@@ -154,13 +159,17 @@ app.run()
 - **機能**:
   - ファイル作成/移動イベント検出
   - ファイル名パターンマッチング
-  - バッチキューイング（5秒遅延）
-  - ファイル削除
+  - バッチキューイング
+  - アップロード完了後、ファイルを保管先に移動
 
 **バッチ処理動作**:
 1. ファイル検出時にキューに追加
 2. 新しいファイルが来るとタイマーをリセット
-3. 5秒間新規ファイルなし→全キューファイルを一括アップロード
+3. `batch_delay` 秒間新規ファイルなし→全キューファイルを一括アップロード
+4. アップロード成功後、ファイルを `uploaded_dir` に移動
+
+**アップロード済みファイルの自動削除**:
+  `uploaded_dir` 内のファイルは、`uploaded_retention_hours` で指定した時間（デフォルト4時間）を過ぎると自動削除されます。削除判定は最終更新日時（mtime）を基準とし、アプリ起動時とアップロード完了後に実行されます。
 
 ### MegaUploader（`service/mega_uploader.py`）
 
@@ -168,8 +177,11 @@ Playwrightを使用したブラウザ自動化によるアップロード処理�
 
 - **機能**:
   - ファイル選択インタフェースの自動操作
-  - アップロード完了待機（最大30秒）
+  - アップロード完了待機（件数増加で判定）
   - 単一ファイルと複数ファイルのアップロード
+
+**アップロード完了判定**:
+  MEGAの「N/Mファイルをアップロード済み」の N 値が選択前より増加したことのみで完了と判定します。テキストの単純な有無では判定しません。
 
 **使用例**:
 ```python
@@ -188,26 +200,28 @@ uploaded = uploader.upload_files(files)
 
 ## 開発
 
+### 開発環境セットアップ
+
+```bash
+# 依存関係のインストール
+uv sync
+
+# 型チェック
+pyright
+```
+
 ### テスト実行
 
 ```bash
 # 全テストを実行
-python -m pytest tests/ -v --tb=short --disable-warnings
+python -m pytest tests/ -v --tb=short
 
 # 特定のテストファイルを実行
 python -m pytest tests/test_tray_app.py -v
 
 # カバレッジレポート付きで実行
-python -m pytest tests/ --cov=app --cov=service --cov=utils
+python -m pytest tests/ --cov=app --cov=service --cov=utils --cov-report=html
 ```
-
-### 型チェック
-
-```bash
-pyright
-```
-
-設定は`pyrightconfig.json`（Python 3.13、標準モード）。
 
 ### 実行ファイルのビルド
 
@@ -216,22 +230,27 @@ python build.py
 ```
 
 PyInstallerを使用して、以下をバンドルした実行ファイルを生成します:
-- `utils/config.ini`設定ファイル
+- `utils/config.ini` 設定ファイル
 - Playwrightブラウザ（Chromium）
 - すべての依存パッケージ
 
-ビルド結果は`dist/MEGATransfer.exe`に出力されます。
+ビルド結果は `dist/MEGATransfer.exe` に出力されます。
+
+**注意**: ビルド前に Playwright Chromium がインストールされていることを確認してください。
+```bash
+playwright install chromium
+```
 
 ## トラブルシューティング
 
 ### ファイルが検出されない
 
 1. `config.ini`の監視フォルダパスが正確か確認
-2. ファイル名パターンが正規表現として正しいか確認
+2. ファイル名パターンの確認
    ```ini
-   # 末尾が "_magnate" で終わるファイルにマッチ
+   # 末尾が "_magnate" で終わるファイル（拡張子前）にマッチ
    pattern = _magnate
-   # この場合、"document_magnate.pdf" は検出されます
+   # 例："document_magnate.pdf" は検出されます
    ```
 3. アプリケーションのログを確認（`logs/MEGATransfer.log`）
 
@@ -239,10 +258,18 @@ PyInstallerを使用して、以下をバンドルした実行ファイルを生
 
 1. MEGAファイルリクエストURLが有効か確認
 2. ネットワーク接続を確認
-3. `config.ini`の`max_wait_time`を増やす
+3. `config.ini`の `max_wait_time` を増やす
    ```ini
-   max_wait_time = 60  # デフォルト30秒から60秒に変更
+   max_wait_time = 180  # デフォルト120秒から180秒に変更
    ```
+4. ブラウザの `headless` 設定を試す（`headless = False` で実際の動作を確認）
+
+### アップロード済みファイルが削除されない
+
+1. `uploaded_dir` パスが正確か確認
+2. `uploaded_retention_hours` の値を確認（デフォルト4時間）
+3. ファイルの最終更新日時が古いか確認
+4. ログで削除処理が実行されているか確認
 
 ### ブラウザが起動しない
 
