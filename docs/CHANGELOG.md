@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-17
+
+### 変更
+- ブラウザをPC既存のMicrosoft Edgeを使用する方式に変更。Chromium同梱は削除
+- ビルド時のブラウザ設定に関するドキュメントを更新
+
 ## [1.1.1] - 2026-08-17
 
 ### 追加
@@ -63,6 +69,7 @@
 - ファイルアップロード後のリネーム処理を削除
 - ファイルアップロード後のファイル削除処理を追加
 
+[1.2.0]: https://github.com/yokamoto5742-h/MEGATransfer/compare/1.1.1...1.2.0
 [1.1.1]: https://github.com/yokamoto5742-h/MEGATransfer/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/yokamoto5742-h/MEGATransfer/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/yokamoto5742-h/MEGATransfer/compare/0.0.1...1.0.0

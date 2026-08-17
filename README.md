@@ -5,18 +5,19 @@ Windows システムトレイアプリケーション。指定ディレクトリ
 ## 主な特徴
 
 - ファイルシステム監視による自動検出と処理
-- Playwrightを使用したブラウザ自動化によるアップロード
+- Microsoft Edgeを使用したブラウザ自動化によるアップロード
 - 複数ファイルのバッチ処理に対応
 - システムトレイインテグレーション
 - ファイル名パターンマッチング
 - アップロード完了後ファイルの自動移動・保管と時間経過による自動削除
+- 多重起動防止（ユーザーセッション単位）
 - 詳細なログ記録と自動ローテーション
 
 ## 前提条件
 
-- **OS**: Windows11
+- **OS**: Windows 11
 - **Python**: 3.13以上
-- **ブラウザ**: Chromium（Playwrightが自動インストール）
+- **ブラウザ**: Microsoft Edge（PC既存）
 
 ## インストール
 
@@ -31,12 +32,7 @@ cd MEGATransfer
 uv sync
 ```
 
-3. Playwrightのブラウザをインストールします
-```bash
-playwright install chromium
-```
-
-4. 設定ファイルを編集します（`utils/config.ini`）
+3. 設定ファイルを編集します（`utils/config.ini`）
 ```ini
 [URL]
 MEGAfilerequest = <your-mega-file-request-url>
@@ -117,7 +113,8 @@ MEGATransfer/
 │   ├── __init__.py
 │   ├── config.ini                # 設定ファイル
 │   ├── config_manager.py         # 設定ローディング
-│   └── log_rotation.py           # ログ管理
+│   ├── log_rotation.py           # ログ管理
+│   └── single_instance.py        # 多重起動防止
 ├── tests/                        # テストスイート
 │   ├── __init__.py
 │   ├── test_tray_app.py
@@ -139,6 +136,7 @@ MEGATransfer/
   - 監視フォルダの存在確認
   - ファイル監視の開始・停止
   - 起動時に既存ファイルをスキャン
+  - 多重起動防止（ユーザーセッション単位のミューテックス）
 
 **主要メソッド**:
 ```python
@@ -173,7 +171,7 @@ app.run()
 
 ### MegaUploader（`service/mega_uploader.py`）
 
-Playwrightを使用したブラウザ自動化によるアップロード処理。
+Microsoft Edgeブラウザの自動化によるアップロード処理。
 
 - **機能**:
   - ファイル選択インタフェースの自動操作
@@ -231,15 +229,11 @@ python build.py
 
 PyInstallerを使用して、以下をバンドルした実行ファイルを生成します:
 - `utils/config.ini` 設定ファイル
-- Playwrightブラウザ（Chromium）
 - すべての依存パッケージ
 
 ビルド結果は `dist/MEGATransfer.exe` に出力されます。
 
-**注意**: ビルド前に Playwright Chromium がインストールされていることを確認してください。
-```bash
-playwright install chromium
-```
+**注意**: 実行ファイルはMicrosoft Edgeを使用するため、配布先PCに Microsoft Edge がインストールされている必要があります。
 
 ## トラブルシューティング
 
@@ -273,12 +267,10 @@ playwright install chromium
 
 ### ブラウザが起動しない
 
-1. Playwrightが正しくインストールされているか確認
-   ```bash
-   playwright install chromium
-   ```
-2. Windowsの実行ポリシーを確認
-3. 管理者権限でアプリケーションを実行してみる
+1. Microsoft Edge がインストールされているか確認（PC既存のEdgeを使用）
+2. Edge のバージョンが最新か確認
+3. Windowsの実行ポリシーを確認
+4. 管理者権限でアプリケーションを実行してみる
 
 ## ライセンス
 
