@@ -53,10 +53,10 @@ python build.py            # PyInstallerによるWindows実行ファイルのビ
   部分一致は送信開始時点で必ずヒットします。個別行の `アップロード済み` 表示も実際の完了より
   早く出ます（実測で約5秒）。件数表示の `N/M` の `N` が選択前より増えたことのみを完了とみなす
   必要があります。
-- **`python build.py` の実行には事前にPlaywrightのChromiumがインストールされている必要が
-  あります**（`playwright install chromium`）。`~/AppData/Local/ms-playwright` 配下から
-  ブラウザを探し、PyInstallerの出力にバンドルします。ブラウザディレクトリが見つからない場合は
-  ビルドが失敗します。
+- **ブラウザはPC既存のMicrosoft Edgeを使う**（`p.chromium.launch(channel="msedge", ...)`）:
+  Chromium本体は同梱せず、配布先PCにプリインストールされているEdgeを起動します。院内共用PCは
+  管理者権限が使えずインターネット経由でのブラウザダウンロードも不可のため採用した方式です。
+  Edgeが存在しない/バージョンが古いPCでは起動に失敗します。
 - **多重起動防止はユーザーセッション単位**（`utils/single_instance.py`）: `Local\` 名前空間の
   名前付きミューテックスで排他するため、同一端末に別ユーザーが同時ログオンしている場合は
   それぞれ1つずつ起動できます。共用端末で監視フォルダを共有していると重複アップロードの

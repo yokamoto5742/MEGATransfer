@@ -99,7 +99,7 @@ class TestMegaUploaderOpenMegaPage:
     def test_open_mega_page_launches_browser(self, uploader, mock_playwright):
         """ブラウザが正しく起動される"""
         with uploader._open_mega_page() as page:
-            mock_playwright['instance'].chromium.launch.assert_called_once_with(headless=True)
+            mock_playwright['instance'].chromium.launch.assert_called_once_with(channel="msedge", headless=True)
 
     def test_open_mega_page_creates_new_page(self, uploader, mock_playwright):
         """新しいページが作成される"""
@@ -141,7 +141,7 @@ class TestMegaUploaderOpenMegaPage:
         uploader = MegaUploader('https://mega.nz/test')
 
         with uploader._open_mega_page() as page:
-            mock_playwright['instance'].chromium.launch.assert_called_once_with(headless=False)
+            mock_playwright['instance'].chromium.launch.assert_called_once_with(channel="msedge", headless=False)
 
 
 def set_progress_texts(mock_page, *texts_per_call):

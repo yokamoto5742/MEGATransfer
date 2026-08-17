@@ -1,23 +1,8 @@
-import os
 import subprocess
 import sys
 
-from pathlib import Path
-
-
-def get_playwright_browsers_path():
-    default_path = Path.home() / 'AppData' / 'Local' / 'ms-playwright'
-    if default_path.exists():
-        return str(default_path)
-
-    print("[ERROR] Playwrightブラウザが見つかりません")
-    return None
-
 
 def build_executable():
-
-    playwright_browsers_path = get_playwright_browsers_path()
-
     command = [
         "pyinstaller",
         "--name=MEGATransfer",
@@ -26,27 +11,8 @@ def build_executable():
         "--hidden-import", "playwright",
         "--hidden-import", "playwright.sync_api",
         "--collect-all", "playwright",
+        "main.py",
     ]
-
-    if playwright_browsers_path and os.path.exists(playwright_browsers_path):
-        print(f"[OK] Playwrightブラウザを含めます: {playwright_browsers_path}")
-
-        browser_dirs = [d for d in os.listdir(playwright_browsers_path)
-                       if d.startswith('chromium-') or d.startswith('chromium_headless_shell-')]
-
-        if browser_dirs:
-            for browser_dir_name in browser_dirs:
-                browser_dir = os.path.join(playwright_browsers_path, browser_dir_name)
-                command.extend([
-                    "--add-data",
-                    f"{browser_dir};playwright/driver/package/.local-browsers/{browser_dir_name}"
-                ])
-                print(f"[OK] {browser_dir_name} を含めました")
-        else:
-            print("[ERROR] Chromiumブラウザディレクトリが見つかりません")
-            return None
-
-    command.append("main.py")
 
     print("\nPyInstallerを実行中...")
     subprocess.run(command, check=True)

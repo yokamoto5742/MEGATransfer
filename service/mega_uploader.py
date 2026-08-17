@@ -34,7 +34,7 @@ class MegaUploader:
     def _open_mega_page(self) -> Generator[Page, None, None]:
         """Chromeブラウザを起動しMEGAページを開く"""
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=self.headless)
+            browser = p.chromium.launch(channel="msedge", headless=self.headless)
             page = browser.new_page()
             page.goto(self.url)
             page.wait_for_load_state("networkidle")
