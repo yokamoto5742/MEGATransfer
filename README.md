@@ -1,6 +1,6 @@
 # MEGATransfer
 
-Windows システムトレイアプリケーション。指定ディレクトリを監視してファイルを自動的にMEGAファイルリクエストにアップロードします。アップロード完了後、ファイルは保管先に移動され、一定時間経過後に自動削除されます。
+Windows システムトレイアプリケーション。指定ディレクトリを監視し、ファイル名のパターンごとに指定したOneDrive共有フォルダへファイルを自動アップロードします。アップロード完了後、ファイルは保管先に移動され、一定時間経過後に自動削除されます。
 
 ## 主な特徴
 
@@ -8,7 +8,7 @@ Windows システムトレイアプリケーション。指定ディレクトリ
 - Microsoft Edgeを使用したブラウザ自動化によるアップロード
 - 複数ファイルのバッチ処理に対応
 - システムトレイインテグレーション
-- ファイル名パターンマッチング
+- ファイル名パターンごとのアップロード先振り分け
 - アップロード完了後ファイルの自動移動・保管と時間経過による自動削除
 - 多重起動防止（ユーザーセッション単位）
 - 詳細なログ記録と自動ローテーション
@@ -35,14 +35,16 @@ uv sync
 3. 設定ファイルを編集します（`utils/config.ini`）
 ```ini
 [URL]
-MEGAfilerequest = <your-mega-file-request-url>
+Taskdiary = <onedrive-shared-folder-url>
+Receive_file = <onedrive-shared-folder-url>
 
 [Paths]
 src_dir = <directory-to-monitor>
 uploaded_dir = <directory-for-uploaded-files>
 
 [filename]
-pattern = <filename-pattern>
+Taskdiary_pattern = <filename-pattern>
+Receive_file_pattern = <filename-pattern>
 ```
 
 ## 使用方法
@@ -59,7 +61,9 @@ python main.py
 
 ```ini
 [URL]
-MEGAfilerequest = https://mega.nz/filerequest/xxxxx
+# OneDrive共有フォルダのURL（編集可能リンク）
+Taskdiary = https://1drv.ms/f/c/xxxxx
+Receive_file = https://1drv.ms/f/c/yyyyy
 
 [Paths]
 src_dir = C:\Users\yokam\Desktop\target
@@ -67,8 +71,9 @@ src_dir = C:\Users\yokam\Desktop\target
 uploaded_dir = C:\Users\yokam\Desktop\uploaded
 
 [filename]
-# ファイル名パターン（拡張子を除いたファイル名の末尾にマッチ）
-pattern = _magnate
+# ファイル名パターン（拡張子を除いたファイル名の末尾にマッチ）。[URL] の同名キーのURLへ転送
+Taskdiary_pattern = _taskdiary
+Receive_file_pattern = _magnate
 
 [App]
 # ファイル書き込み完了を待つ時間（秒）
@@ -79,16 +84,14 @@ batch_delay = 3.0
 uploaded_retention_hours = 4
 
 [Uploader]
-# アップロード完了判定用テキスト
-upload_complete_text = アップロード済み
-# 完了チェックの最大待機時間（秒）
+# 同名ファイルがある場合に表示される上書きボタンのテキスト
+replace_button_text = 置き換える
+# アップロード応答の最大待機時間（秒）
 max_wait_time = 120
-# 完了チェックの間隔（秒）
-check_interval = 0.5
 # ブラウザをヘッドレスモードで実行するか
 headless = True
 # アップロード完了後の待機時間（秒）
-post_upload_wait = 5.0
+post_upload_wait = 1.0
 
 [LOGGING]
 log_retention_days = 7
@@ -108,7 +111,7 @@ MEGATransfer/
 ├── service/                      # ファイル処理・アップロード処理
 │   ├── __init__.py
 │   ├── file_upload_handler.py    # ファイル監視とキュー管理
-│   └── mega_uploader.py          # Playwr基底のアップロード実装
+│   └── onedrive_uploader.py      # PlaywrightによるOneDriveアップロード実装
 ├── utils/                        # ユーティリティ
 │   ├── __init__.py
 │   ├── config.ini                # 設定ファイル
@@ -118,8 +121,10 @@ MEGATransfer/
 ├── tests/                        # テストスイート
 │   ├── __init__.py
 │   ├── test_tray_app.py
+│   ├── test_config_manager.py
 │   ├── test_file_upload_handler.py
-│   └── test_mega_uploader.py
+│   ├── test_onedrive_uploader.py
+│   └── test_single_instance.py
 ├── main.py                       # エントリーポイント
 ├── build.py                      # 実行ファイルビルドスクリプト
 └── CLAUDE.md                     # Claude Code用開発ガイドライン
@@ -156,37 +161,37 @@ app.run()
 
 - **機能**:
   - ファイル作成/移動イベント検出
-  - ファイル名パターンマッチング
+  - ファイル名パターンによるアップロード先の判定
   - バッチキューイング
   - アップロード完了後、ファイルを保管先に移動
 
 **バッチ処理動作**:
 1. ファイル検出時にキューに追加
 2. 新しいファイルが来るとタイマーをリセット
-3. `batch_delay` 秒間新規ファイルなし→全キューファイルを一括アップロード
+3. `batch_delay` 秒間新規ファイルなし→キューのファイルをアップロード先ごとにまとめ、順番にアップロード
 4. アップロード成功後、ファイルを `uploaded_dir` に移動
 
 **アップロード済みファイルの自動削除**:
   `uploaded_dir` 内のファイルは、`uploaded_retention_hours` で指定した時間（デフォルト4時間）を過ぎると自動削除されます。削除判定は最終更新日時（mtime）を基準とし、アプリ起動時とアップロード完了後に実行されます。
 
-### MegaUploader（`service/mega_uploader.py`）
+### OneDriveUploader（`service/onedrive_uploader.py`）
 
-Microsoft Edgeブラウザの自動化によるアップロード処理。
+Microsoft Edgeブラウザの自動化によるOneDrive共有フォルダへのアップロード処理。
 
 - **機能**:
-  - ファイル選択インタフェースの自動操作
-  - アップロード完了待機（件数増加で判定）
-  - 単一ファイルと複数ファイルのアップロード
+  - 「作成またはアップロード」→「ファイルのアップロード」の自動操作
+  - アップロード完了待機（送信APIの応答で判定）
+  - 同名ファイルがある場合は「置き換える」で上書き
 
 **アップロード完了判定**:
-  MEGAの「N/Mファイルをアップロード済み」の N 値が選択前より増加したことのみで完了と判定します。テキストの単純な有無では判定しません。
+  画面表示ではなく、OneDriveがファイルを送信するAPI（`Files/AddUsingPath`）の応答で判定します。成功応答で完了、エラー応答の場合は「置き換える」を押して再送信し、その応答で判定します。
 
 **使用例**:
 ```python
 from pathlib import Path
-from service.mega_uploader import MegaUploader
+from service.onedrive_uploader import OneDriveUploader
 
-uploader = MegaUploader("https://mega.nz/filerequest/xxxxx")
+uploader = OneDriveUploader("https://1drv.ms/f/c/xxxxx")
 files = [Path("file1.txt"), Path("file2.txt")]
 uploaded = uploader.upload_files(files)
 # uploaded: アップロード成功したファイルのパスリスト
@@ -243,14 +248,14 @@ PyInstallerを使用して、以下をバンドルした実行ファイルを生
 2. ファイル名パターンの確認
    ```ini
    # 末尾が "_magnate" で終わるファイル（拡張子前）にマッチ
-   pattern = _magnate
+   Receive_file_pattern = _magnate
    # 例："document_magnate.pdf" は検出されます
    ```
 3. アプリケーションのログを確認（`logs/MEGATransfer.log`）
 
 ### アップロードが完了しない
 
-1. MEGAファイルリクエストURLが有効か確認
+1. OneDrive共有フォルダのURLが有効か（編集可能リンクか）確認
 2. ネットワーク接続を確認
 3. `config.ini`の `max_wait_time` を増やす
    ```ini

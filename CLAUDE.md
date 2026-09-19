@@ -5,12 +5,12 @@
 ## プロジェクト概要
 
 MEGATransferは、指定パターンに一致するファイルを監視ディレクトリで検知し、Playwrightによる
-ブラウザ自動操作でMEGAのファイルリクエストページにアップロードするWindowsシステムトレイアプリ
-です。アップロードに成功したファイルは、監視ディレクトリから即座に削除されます。
+ブラウザ自動操作で、パターンごとに指定したOneDrive共有フォルダへアップロードするWindows
+システムトレイアプリです。アップロードに成功したファイルは、監視ディレクトリから保管先へ移動されます。
 
 処理フロー: `main.py` → `app/tray_app.py`（`TrayApp`、トレイアイコン＋監視スレッド）→
 `service/file_upload_handler.py`（`FileUploadHandler`、`watchdog.FileSystemEventHandler`）→
-`service/mega_uploader.py`（`MegaUploader`、Playwright同期API）。設定は
+`service/onedrive_uploader.py`（`OneDriveUploader`、Playwright同期API）。設定は
 `utils/config_manager.py` が `utils/config.ini` から読み込みます。
 
 ## 開発コマンド
@@ -33,12 +33,15 @@ python build.py            # PyInstallerによるWindows実行ファイルのビ
   読み込みます。config.iniの配置に関する変更は両方のモードで動作する必要があります。
 - **アップロードのタイミングはconfig.iniの値の連鎖で決まる**（個別の定数ではない）:
   `wait_time`（ファイル書き込み後の安定待ち）→ `batch_delay`（バッチアップロード前のデバウンス、
-  新しいファイルが来るたびにリセット）→ `check_interval`/`max_wait_time`（アップロード完了の
-  ポーリング）→ `post_upload_wait`（成功後の待機）。一部だけ変更すると検知タイミングがずれる
-  可能性があります。
-- **ファイル名マッチングはサフィックスベース**: `get_rename_pattern()` はconfig.iniの
-  `[filename] pattern` を読み込み、末尾に `$` がなければ自動付与し、ファイル名全体ではなく
-  拡張子を除いたステム部分に対してマッチングします。
+  新しいファイルが来るたびにリセット）→ `max_wait_time`（送信APIの応答待ち）→
+  `post_upload_wait`（成功後の待機）。一部だけ変更すると検知タイミングがずれる可能性があります。
+- **ファイル名マッチングはサフィックスベース**: `get_upload_destinations()` は
+  `UPLOAD_DESTINATION_NAMES` の各名前について `[URL] <名前>` と `[filename] <名前>_pattern` を
+  組にして読み込みます。パターンは末尾に `$` がなければ自動付与し、ファイル名全体ではなく
+  拡張子を除いたステム部分に対してマッチングします。アップロード先を増やす場合は
+  `UPLOAD_DESTINATION_NAMES` とconfig.iniの両方に追加します。
+- **1回のバッチに複数のアップロード先が混ざる**: `_process_pending_files` はファイルを
+  アップロード先ごとにまとめ、アップロード先ごとにブラウザを起動して順番に処理します。
 - **アップロード成功後のファイルは削除ではなく移動される**（`_move_uploaded_files`）: 移動先は
   config.iniの `[Paths] uploaded_dir`。未設定の場合は `src_dir` 配下の `_uploaded` になります。
   共用端末では他ユーザーから見えない場所を指定してください。移動先に同名ファイルがある場合は
@@ -48,11 +51,15 @@ python build.py            # PyInstallerによるWindows実行ファイルのビ
   アップロード完了後に削除します。判定は更新日時（mtime）で、`_move_uploaded_files` が移動直後に
   `os.utime` でmtimeを現在時刻へ更新するため「保管してからの経過時間」が基準になります。
   サブディレクトリは対象外です。
-- **アップロード完了は「テキストの有無」では判定できない**（`_read_completed_count`）: MEGAは
-  ファイル選択直後に「0/1ファイルをアップロード済み」と表示するため、`アップロード済み` の
-  部分一致は送信開始時点で必ずヒットします。個別行の `アップロード済み` 表示も実際の完了より
-  早く出ます（実測で約5秒）。件数表示の `N/M` の `N` が選択前より増えたことのみを完了とみなす
-  必要があります。
+- **アップロード完了は送信APIの応答で判定する**（`OneDriveUploader._upload_single_file`）:
+  OneDriveのWeb画面はファイルを `POST .../Files/AddUsingPath(...)` で送信します（15MBでも
+  分割されず1リクエスト）。ファイル一覧の行はアップロード中から表示され、表示が一時的に
+  増減するため、画面表示では判定しません。同名ファイルがあると応答は400になり、
+  「置き換える」ボタン付きの通知が出ます。これを押すと `overwrite` 付きで再送信されるため、
+  その応答で判定します。
+- **共有リンクは匿名の編集可能リンク**: サインインなしでアップロードと上書きはできますが、
+  削除にはMicrosoftアカウントのサインインが必要です。ボタンは表示テキストで探すため、
+  ブラウザは `locale="ja-JP"` で開きます。
 - **ブラウザはPC既存のMicrosoft Edgeを使う**（`p.chromium.launch(channel="msedge", ...)`）:
   Chromium本体は同梱せず、配布先PCにプリインストールされているEdgeを起動します。院内共用PCは
   管理者権限が使えずインターネット経由でのブラウザダウンロードも不可のため採用した方式です。
@@ -62,8 +69,8 @@ python build.py            # PyInstallerによるWindows実行ファイルのビ
   それぞれ1つずつ起動できます。共用端末で監視フォルダを共有していると重複アップロードの
   余地が残ります。ミューテックスの解放はプロセス終了時にOSが行うため、強制終了後もロックは
   残りません。ミューテックスの作成自体に失敗した場合は、起動を妨げずログのみ出力します。
-- config.iniの `headless` はアップロード時の実ブラウザ表示を制御します。MEGAのアップロードUIは
-  ヘッドレスモードで不安定になることがあります。
+- config.iniの `headless` はアップロード時の実ブラウザ表示を制御します。OneDriveへのアップロードは
+  ヘッドレスモードで動作することを確認済みです。
 
 ## 関連ドキュメント
 

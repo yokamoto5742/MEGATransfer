@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### 追加
+- ファイル名パターンごとにOneDrive共有フォルダへアップロードする機能（`OneDriveUploader`）。`_taskdiary` は `Taskdiary`、`_magnate` は `Receive_file` のURLへ送信
+- 1回のバッチに複数のアップロード先のファイルが混ざった場合、アップロード先ごとに順番に処理
+- OneDriveに同名ファイルがある場合は「置き換える」で上書き
+- config.iniに `replace_button_text` を追加
+
+### 変更
+- アップロード完了判定を、OneDriveの送信API（`Files/AddUsingPath`）の応答で行う方式に変更
+- `post_upload_wait` を5.0秒から1.0秒に変更
+
+### 削除
+- MEGAファイルリクエストへのアップロード機能（`MegaUploader`）
+- config.iniの `MEGAfilerequest`、`pattern`、`upload_complete_text`、`check_interval`
+
 ## [1.2.0] - 2026-08-17
 
 ### 変更

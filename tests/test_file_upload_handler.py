@@ -10,43 +10,50 @@ import pytest
 from watchdog.events import FileCreatedEvent, FileMovedEvent
 
 from service.file_upload_handler import FileUploadHandler
+from utils.config_manager import UploadDestination
+
+TEST_DESTINATIONS = [
+    UploadDestination('Test', re.compile(r'test.*$'), 'https://1drv.ms/f/test'),
+    UploadDestination('Other', re.compile(r'_other$'), 'https://1drv.ms/f/other'),
+]
 
 
 @pytest.fixture
 def mock_config(tmp_path):
     """設定のモックを提供"""
-    with patch('service.file_upload_handler.get_rename_pattern') as mock_pattern, \
+    with patch('service.file_upload_handler.get_upload_destinations') as mock_destinations, \
          patch('service.file_upload_handler.get_wait_time') as mock_wait, \
          patch('service.file_upload_handler.get_batch_delay') as mock_batch, \
          patch('service.file_upload_handler.get_uploaded_dir') as mock_uploaded_dir, \
-         patch('service.file_upload_handler.get_uploaded_retention_hours') as mock_retention, \
-         patch('service.file_upload_handler.get_mega_url') as mock_url:
+         patch('service.file_upload_handler.get_uploaded_retention_hours') as mock_retention:
 
-        mock_pattern.return_value = re.compile(r'test.*$')
+        mock_destinations.return_value = TEST_DESTINATIONS
         mock_wait.return_value = 0.1
         mock_batch.return_value = 0.2
         mock_uploaded_dir.return_value = str(tmp_path / "_uploaded")
         mock_retention.return_value = 4.0
-        mock_url.return_value = 'https://mega.nz/test'
 
         yield {
-            'pattern': mock_pattern,
+            'destinations': mock_destinations,
             'wait_time': mock_wait,
             'batch_delay': mock_batch,
             'uploaded_dir': mock_uploaded_dir,
             'retention_hours': mock_retention,
-            'mega_url': mock_url
         }
+
+
+def _create_mock_uploader(url: str) -> MagicMock:
+    uploader = MagicMock()
+    uploader.upload_files.return_value = []
+    return uploader
 
 
 @pytest.fixture
 def mock_uploader():
-    """MegaUploaderのモックを提供"""
-    with patch('service.file_upload_handler.MegaUploader') as mock_mega:
-        mock_instance = MagicMock()
-        mock_instance.upload_files.return_value = []
-        mock_mega.return_value = mock_instance
-        yield mock_instance
+    """アップロード先ごとに別々のOneDriveUploaderのモックを提供"""
+    with patch('service.file_upload_handler.OneDriveUploader') as mock_class:
+        mock_class.side_effect = _create_mock_uploader
+        yield mock_class
 
 
 @pytest.fixture
@@ -62,11 +69,13 @@ class TestFileUploadHandlerInit:
         """設定が正しく読み込まれる"""
         handler = FileUploadHandler()
 
-        assert handler.pattern == mock_config['pattern'].return_value
+        assert handler.destinations == TEST_DESTINATIONS
         assert handler.wait_time == 0.1
         assert handler.batch_delay == 0.2
         assert handler.retention_hours == 4.0
-        assert handler.uploader == mock_uploader
+        assert set(handler.uploaders) == {'Test', 'Other'}
+        mock_uploader.assert_any_call('https://1drv.ms/f/test')
+        mock_uploader.assert_any_call('https://1drv.ms/f/other')
 
     def test_init_creates_empty_queue(self, handler):
         """初期化時にキューが空である"""
@@ -101,6 +110,14 @@ class TestFileUploadHandlerShouldProcess:
     def test_should_process_with_special_characters(self, handler):
         """特殊文字を含むファイル名も正しく判定"""
         assert handler.should_process('test_file-01') is True
+
+    def test_should_process_second_destination(self, handler):
+        """2つ目のアップロード先のパターンにもマッチする"""
+        assert handler.should_process('report_other') is True
+
+    def test_should_process_pattern_is_suffix_only(self, handler):
+        """パターンが末尾以外にあるファイル名は処理対象外"""
+        assert handler.should_process('report_other_v2') is False
 
 
 class TestFileUploadHandlerOnCreated:
@@ -250,7 +267,7 @@ class TestFileUploadHandlerProcessPendingFiles:
         with caplog.at_level(logging.INFO):
             handler._process_pending_files()
 
-            handler.uploader.upload_files.assert_not_called()
+            handler.uploaders['Test'].upload_files.assert_not_called()
 
     def test_process_pending_files_uploads_and_moves(self, handler, tmp_path):
         """ファイルをアップロードして保管先へ移動"""
@@ -260,11 +277,11 @@ class TestFileUploadHandlerProcessPendingFiles:
         test_file2.write_text("content2")
 
         handler._pending_files = [test_file1, test_file2]
-        handler.uploader.upload_files.return_value = [test_file1, test_file2]
+        handler.uploaders['Test'].upload_files.return_value = [test_file1, test_file2]
 
         handler._process_pending_files()
 
-        handler.uploader.upload_files.assert_called_once_with([test_file1, test_file2])
+        handler.uploaders['Test'].upload_files.assert_called_once_with([test_file1, test_file2])
         assert not test_file1.exists()
         assert not test_file2.exists()
         assert (handler.uploaded_dir / "test_file1.txt").exists()
@@ -278,7 +295,7 @@ class TestFileUploadHandlerProcessPendingFiles:
         test_file2.write_text("content2")
 
         handler._pending_files = [test_file1, test_file2]
-        handler.uploader.upload_files.return_value = [test_file1]
+        handler.uploaders['Test'].upload_files.return_value = [test_file1]
 
         handler._process_pending_files()
 
@@ -291,7 +308,7 @@ class TestFileUploadHandlerProcessPendingFiles:
         test_file.write_text("content")
 
         handler._pending_files = [test_file]
-        handler.uploader.upload_files.return_value = [test_file]
+        handler.uploaders['Test'].upload_files.return_value = [test_file]
 
         handler._process_pending_files()
 
@@ -305,12 +322,58 @@ class TestFileUploadHandlerProcessPendingFiles:
         test_file2.write_text("content2")
 
         handler._pending_files = [test_file1, test_file2]
-        handler.uploader.upload_files.return_value = [test_file1]
+        handler.uploaders['Test'].upload_files.return_value = [test_file1]
 
         with caplog.at_level(logging.WARNING):
             handler._process_pending_files()
 
             assert "1件のファイルがアップロードに失敗しました" in caplog.text
+
+    def test_process_pending_files_routes_by_destination(self, handler, tmp_path):
+        """混在したファイルをアップロード先ごとに振り分ける"""
+        test_file = tmp_path / "test_file.txt"
+        other_file = tmp_path / "report_other.txt"
+        test_file.write_text("content1")
+        other_file.write_text("content2")
+
+        handler._pending_files = [test_file, other_file]
+        handler.uploaders['Test'].upload_files.return_value = [test_file]
+        handler.uploaders['Other'].upload_files.return_value = [other_file]
+
+        handler._process_pending_files()
+
+        handler.uploaders['Test'].upload_files.assert_called_once_with([test_file])
+        handler.uploaders['Other'].upload_files.assert_called_once_with([other_file])
+        assert (handler.uploaded_dir / "test_file.txt").exists()
+        assert (handler.uploaded_dir / "report_other.txt").exists()
+
+    def test_process_pending_files_skips_unused_destination(self, handler, tmp_path):
+        """対象ファイルがないアップロード先は呼び出さない"""
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("content")
+
+        handler._pending_files = [test_file]
+        handler.uploaders['Test'].upload_files.return_value = [test_file]
+
+        handler._process_pending_files()
+
+        handler.uploaders['Other'].upload_files.assert_not_called()
+
+    def test_process_pending_files_one_destination_fails(self, handler, tmp_path):
+        """片方のアップロード先が失敗しても他方のファイルは移動する"""
+        test_file = tmp_path / "test_file.txt"
+        other_file = tmp_path / "report_other.txt"
+        test_file.write_text("content1")
+        other_file.write_text("content2")
+
+        handler._pending_files = [test_file, other_file]
+        handler.uploaders['Test'].upload_files.return_value = []
+        handler.uploaders['Other'].upload_files.return_value = [other_file]
+
+        handler._process_pending_files()
+
+        assert test_file.exists()
+        assert not other_file.exists()
 
 
 class TestFileUploadHandlerMoveUploadedFiles:
@@ -464,7 +527,7 @@ class TestFileUploadHandlerCleanupUploadedDir:
         test_file.write_text("content")
 
         handler._pending_files = [test_file]
-        handler.uploader.upload_files.return_value = [test_file]
+        handler.uploaders['Test'].upload_files.return_value = [test_file]
 
         with patch.object(handler, 'cleanup_uploaded_dir') as mock_cleanup:
             handler._process_pending_files()
@@ -543,11 +606,11 @@ class TestFileUploadHandlerProcessNow:
         test_file.write_text("content")
 
         handler._pending_files = [test_file]
-        handler.uploader.upload_files.return_value = [test_file]
+        handler.uploaders['Test'].upload_files.return_value = [test_file]
 
         handler.process_now()
 
-        handler.uploader.upload_files.assert_called_once()
+        handler.uploaders['Test'].upload_files.assert_called_once()
         assert len(handler._pending_files) == 0
 
     def test_process_now_without_timer(self, handler):
@@ -654,7 +717,7 @@ class TestFileUploadHandlerEdgeCases:
         test_file.write_text("content")
 
         handler._pending_files = [test_file]
-        handler.uploader.upload_files.return_value = [test_file]
+        handler.uploaders['Test'].upload_files.return_value = [test_file]
 
         # ロックが正しく使われることを確認
         handler._process_pending_files()
@@ -663,9 +726,6 @@ class TestFileUploadHandlerEdgeCases:
 
     def test_unicode_filename_processing(self, handler, tmp_path):
         """Unicode文字を含むファイル名の処理"""
-        # パターンを日本語対応に変更
-        handler.pattern = re.compile(r'test.*$')
-
         test_file = tmp_path / "test_日本語.txt"
         test_file.write_text("content")
 

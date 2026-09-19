@@ -7,11 +7,11 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
 
-from service.mega_uploader import MegaUploader
+from service.onedrive_uploader import OneDriveUploader
 from utils.config_manager import (
+    UploadDestination,
     get_batch_delay,
-    get_mega_url,
-    get_rename_pattern,
+    get_upload_destinations,
     get_uploaded_dir,
     get_uploaded_retention_hours,
     get_wait_time,
@@ -21,19 +21,17 @@ logger = logging.getLogger(__name__)
 
 
 class FileUploadHandler(FileSystemEventHandler):
-    """ファイルをMEGAにアップロードするハンドラー"""
+    """ファイルをOneDriveにアップロードするハンドラー"""
 
     def __init__(self):
         super().__init__()
-        self.pattern = get_rename_pattern()
+        self.destinations = get_upload_destinations()
         self.wait_time = get_wait_time()
         self.batch_delay = get_batch_delay()
         self.uploaded_dir = Path(get_uploaded_dir())
         self.retention_hours = get_uploaded_retention_hours()
 
-        # MEGAアップローダーの初期化
-        mega_url = get_mega_url()
-        self.uploader = MegaUploader(mega_url)
+        self.uploaders = {d.name: OneDriveUploader(d.url) for d in self.destinations}
 
         # 複数ファイル処理用のキュー
         self._pending_files: list[Path] = []
@@ -94,8 +92,10 @@ class FileUploadHandler(FileSystemEventHandler):
 
         logger.info(f"バッチ処理開始: {len(files_to_process)}件のファイルを処理します")
 
-        # 複数ファイルを一括アップロード
-        uploaded_files = self.uploader.upload_files(files_to_process)
+        uploaded_files: list[Path] = []
+        for name, files in self._group_by_destination(files_to_process).items():
+            logger.info(f"{name}へ{len(files)}件のファイルをアップロードします")
+            uploaded_files += self.uploaders[name].upload_files(files)
 
         # アップロードに成功したファイルを保管先へ移動
         if uploaded_files:
@@ -164,9 +164,25 @@ class FileUploadHandler(FileSystemEventHandler):
         if deleted_count > 0:
             logger.info(f"{deleted_count}件の保管ファイルを削除しました")
 
+    def _find_destination(self, filename: str) -> UploadDestination | None:
+        """ファイル名のパターンに一致するアップロード先を取得"""
+        for destination in self.destinations:
+            if destination.pattern.search(filename):
+                return destination
+        return None
+
+    def _group_by_destination(self, files: list[Path]) -> dict[str, list[Path]]:
+        """ファイルをアップロード先ごとにまとめる"""
+        groups: dict[str, list[Path]] = {}
+        for file_path in files:
+            destination = self._find_destination(file_path.stem)
+            if destination:
+                groups.setdefault(destination.name, []).append(file_path)
+        return groups
+
     def should_process(self, filename: str) -> bool:
         """ファイル名が処理対象かどうかを判定"""
-        return bool(self.pattern.search(filename))
+        return self._find_destination(filename) is not None
 
     def get_pending_count(self) -> int:
         """待機中のファイル数を取得"""

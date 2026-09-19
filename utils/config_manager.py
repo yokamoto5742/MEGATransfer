@@ -2,6 +2,7 @@ import configparser
 import os
 import re
 import sys
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -67,18 +68,33 @@ def get_uploaded_dir() -> str:
     return uploaded_dir or os.path.join(config.get('Paths', 'src_dir'), '_uploaded')
 
 
-def get_mega_url() -> str:
-    """MEGAファイルリクエストのURLを取得"""
+@dataclass(frozen=True)
+class UploadDestination:
+    """ファイル名パターンとアップロード先URLの組"""
+    name: str
+    pattern: re.Pattern
+    url: str
+
+
+# config.iniの [URL] のキー名。パターンは [filename] の「キー名_pattern」から読み込む
+UPLOAD_DESTINATION_NAMES = ('Taskdiary', 'Receive_file')
+
+
+def get_upload_destinations() -> list[UploadDestination]:
+    """アップロード先ごとのファイル名パターンとURLを取得"""
     config = load_config()
-    return config.get('URL', 'MEGAfilerequest')
+    return [
+        UploadDestination(
+            name=name,
+            pattern=_compile_suffix_pattern(config.get('filename', f'{name}_pattern', fallback='')),
+            url=config.get('URL', name),
+        )
+        for name in UPLOAD_DESTINATION_NAMES
+    ]
 
 
-def get_rename_pattern() -> re.Pattern:
-    """ファイル名変換用の正規表現パターンを取得"""
-    config = load_config()
-    # config.iniの [filename] セクションを優先的に読み込む
-    pattern_str = config.get('filename', 'pattern', fallback='')
-
+def _compile_suffix_pattern(pattern_str: str) -> re.Pattern:
+    """ファイル名末尾にマッチする正規表現パターンを作成"""
     if not pattern_str:
         raise ValueError("パターンが設定されていません")
 
@@ -112,22 +128,16 @@ def get_uploaded_retention_hours() -> float:
     return config.getfloat('App', 'uploaded_retention_hours', fallback=4.0)
 
 
-def get_upload_complete_text() -> str:
-    """アップロード完了を示すテキストを取得"""
+def get_replace_button_text() -> str:
+    """同名ファイルを上書きするボタンのテキストを取得"""
     config = load_config()
-    return config.get('Uploader', 'upload_complete_text', fallback='アップロード済み')
+    return config.get('Uploader', 'replace_button_text', fallback='置き換える')
 
 
 def get_max_wait_time() -> float:
     """完了チェックの最大待機時間を取得（秒）"""
     config = load_config()
     return config.getfloat('Uploader', 'max_wait_time', fallback=300)
-
-
-def get_check_interval() -> float:
-    """完了チェックの間隔を取得（秒）"""
-    config = load_config()
-    return config.getfloat('Uploader', 'check_interval', fallback=0.5)
 
 
 def get_headless() -> bool:
