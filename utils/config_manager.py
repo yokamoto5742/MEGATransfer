@@ -3,6 +3,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -74,6 +75,15 @@ class UploadDestination:
     name: str
     pattern: re.Pattern
     url: str
+    strip_pattern: bool = False
+
+    def upload_name(self, file_path: Path) -> str:
+        """アップロード時のファイル名を取得（設定によりステム末尾のパターン部分を削除）"""
+        if not self.strip_pattern:
+            return file_path.name
+        stem = self.pattern.sub('', file_path.stem, count=1)
+        # 削除するとステムが空になる場合は元の名前のままにする
+        return f"{stem}{file_path.suffix}" if stem else file_path.name
 
 
 # URLは.envの同名キー、パターンはconfig.iniの [filename] の「キー名_pattern」から読み込む
@@ -88,6 +98,7 @@ def get_upload_destinations() -> list[UploadDestination]:
             name=name,
             pattern=_compile_suffix_pattern(config.get('filename', f'{name}_pattern', fallback='')),
             url=_get_upload_url(name),
+            strip_pattern=config.getboolean('filename', f'{name}_strip_pattern', fallback=False),
         )
         for name in UPLOAD_DESTINATION_NAMES
     ]

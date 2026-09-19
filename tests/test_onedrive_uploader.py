@@ -32,7 +32,7 @@ def mock_config():
 
 @pytest.fixture
 def uploader(mock_config):
-    return OneDriveUploader('https://1drv.ms/f/test')
+    return OneDriveUploader('https://1drv.ms/f/test', lambda path: path.name)
 
 
 @pytest.fixture
@@ -99,6 +99,19 @@ class TestUploadSingleFile:
             "a_taskdiary.md"
         )
         page.get_by_role.assert_not_called()
+
+    def test_sends_renamed_file_contents(self, mock_config, tmp_path):
+        """アップロード名が異なる場合はファイル内容を新しい名前で渡す"""
+        file_path = tmp_path / "a_magnate.md"
+        file_path.write_bytes(b"content")
+        uploader = OneDriveUploader('https://1drv.ms/f/test', lambda path: "a.md")
+        page = MagicMock()
+        page.expect_response.return_value = _response_context(_response(ok=True))
+
+        assert uploader._upload_single_file(page, file_path) is True
+        page.expect_file_chooser.return_value.__enter__.return_value.value.set_files.assert_called_once_with(
+            {"name": "a.md", "mimeType": "text/markdown", "buffer": b"content"}
+        )
 
     def test_replaces_existing_file(self, uploader):
         """同名ファイルで拒否された場合は「置き換える」を押して再送信する"""

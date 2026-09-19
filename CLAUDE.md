@@ -44,6 +44,10 @@ python build.py            # PyInstallerによるWindows実行ファイルのビ
   起動を止めます。パターンは末尾に `$` がなければ自動付与し、ファイル名全体ではなく
   拡張子を除いたステム部分に対してマッチングします。アップロード先を増やす場合は
   `UPLOAD_DESTINATION_NAMES`・config.ini・`.env` に追加します。
+- **アップロード時にファイル名を変換できる**: config.iniの `[filename] <名前>_strip_pattern = True`
+  の場合、ステム末尾のパターン部分を削除した名前でアップロードします（`test_magnate.md` →
+  `test.md`、未設定時はFalse）。ローカルのファイル名は変えず、Playwrightの `FilePayload`
+  （内容＋新しい名前）をファイル選択ダイアログに渡します。保管先には元の名前で移動されます。
 - **1回のバッチに複数のアップロード先が混ざる**: `_process_pending_files` はファイルを
   アップロード先ごとにまとめ、アップロード先ごとにブラウザを起動して順番に処理します。
 - **アップロード成功後のファイルは削除ではなく移動される**（`_move_uploaded_files`）: 移動先は

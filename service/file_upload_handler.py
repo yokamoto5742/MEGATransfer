@@ -31,7 +31,7 @@ class FileUploadHandler(FileSystemEventHandler):
         self.uploaded_dir = Path(get_uploaded_dir())
         self.retention_hours = get_uploaded_retention_hours()
 
-        self.uploaders = {d.name: OneDriveUploader(d.url) for d in self.destinations}
+        self.uploaders = {d.name: OneDriveUploader(d.url, d.upload_name) for d in self.destinations}
 
         # 複数ファイル処理用のキュー
         self._pending_files: list[Path] = []

@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 追加
+- config.iniの `[filename]` に `<名前>_strip_pattern` を追加。Trueの場合、ファイル名末尾のパターン部分を削除した名前でアップロードする（例: `test_magnate.md` → `test.md`）
+- `Receive_file` は変換あり、`Taskdiary` は変換なしで設定。ローカルおよび保管先のファイル名は変更しない
+
 ## [1.3.1] - 2026-09-19
 
 ### 変更

@@ -42,7 +42,7 @@ def mock_config(tmp_path):
         }
 
 
-def _create_mock_uploader(url: str) -> MagicMock:
+def _create_mock_uploader(url: str, upload_name) -> MagicMock:
     uploader = MagicMock()
     uploader.upload_files.return_value = []
     return uploader
@@ -74,8 +74,8 @@ class TestFileUploadHandlerInit:
         assert handler.batch_delay == 0.2
         assert handler.retention_hours == 4.0
         assert set(handler.uploaders) == {'Test', 'Other'}
-        mock_uploader.assert_any_call('https://1drv.ms/f/test')
-        mock_uploader.assert_any_call('https://1drv.ms/f/other')
+        mock_uploader.assert_any_call('https://1drv.ms/f/test', TEST_DESTINATIONS[0].upload_name)
+        mock_uploader.assert_any_call('https://1drv.ms/f/other', TEST_DESTINATIONS[1].upload_name)
 
     def test_init_creates_empty_queue(self, handler):
         """初期化時にキューが空である"""

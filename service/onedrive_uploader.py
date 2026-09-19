@@ -1,10 +1,11 @@
 import logging
+import mimetypes
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 
-from playwright.sync_api import Page, Response, sync_playwright
+from playwright.sync_api import FilePayload, Page, Response, sync_playwright
 
 from utils.config_manager import (
     get_headless,
@@ -25,8 +26,9 @@ REPLACE_BUTTON_TIMEOUT_MS = 5000
 class OneDriveUploader:
     """OneDrive共有フォルダへのアップロードを実施"""
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, upload_name: Callable[[Path], str]):
         self.url = url
+        self.upload_name = upload_name
         self.replace_button_text = get_replace_button_text()
         self.max_wait_time = get_max_wait_time()
         self.headless = get_headless()
@@ -52,13 +54,24 @@ class OneDriveUploader:
     def _is_upload_response(response: Response) -> bool:
         return response.request.method == "POST" and UPLOAD_API_PATH in response.url
 
+    def _file_to_select(self, file_path: Path) -> str | FilePayload:
+        """ファイル選択ダイアログに渡す値を取得（名前を変える場合は内容と新しい名前を渡す）"""
+        upload_name = self.upload_name(file_path)
+        if upload_name == file_path.name:
+            return str(file_path)
+
+        logger.info(f"ファイル名を変換してアップロードします: {file_path.name} -> {upload_name}")
+        mime_type = mimetypes.guess_type(upload_name)[0] or "application/octet-stream"
+        return FilePayload(name=upload_name, mimeType=mime_type, buffer=file_path.read_bytes())
+
     def _send_file(self, page: Page, file_path: Path) -> Response:
         """アップロードメニューからファイルを選択し、送信APIの応答を返す"""
+        file_to_select = self._file_to_select(file_path)
         with page.expect_response(self._is_upload_response, timeout=self.max_wait_time * 1000) as response_info:
             page.locator(NEW_COMMAND_SELECTOR).click()
             with page.expect_file_chooser() as chooser_info:
                 page.locator(UPLOAD_FILE_SELECTOR).click()
-            chooser_info.value.set_files(str(file_path))
+            chooser_info.value.set_files(file_to_select)
         return response_info.value
 
     def _replace_existing_file(self, page: Page) -> Response:
