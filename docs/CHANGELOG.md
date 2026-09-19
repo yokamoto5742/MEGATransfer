@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-19
+
 ### 変更
 - セキュリティ向上のため、OneDrive共有URLの管理をconfig.iniから `.env` に移行。キー名は `Taskdiary`、`Receive_file`
 - 起動時に `.env` を読み込むように変更。実行ファイルでは同梱した `.env` を読み込む
