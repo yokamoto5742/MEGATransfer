@@ -76,7 +76,7 @@ class UploadDestination:
     url: str
 
 
-# config.iniの [URL] のキー名。パターンは [filename] の「キー名_pattern」から読み込む
+# URLは.envの同名キー、パターンはconfig.iniの [filename] の「キー名_pattern」から読み込む
 UPLOAD_DESTINATION_NAMES = ('Taskdiary', 'Receive_file')
 
 
@@ -87,10 +87,18 @@ def get_upload_destinations() -> list[UploadDestination]:
         UploadDestination(
             name=name,
             pattern=_compile_suffix_pattern(config.get('filename', f'{name}_pattern', fallback='')),
-            url=config.get('URL', name),
+            url=_get_upload_url(name),
         )
         for name in UPLOAD_DESTINATION_NAMES
     ]
+
+
+def _get_upload_url(name: str) -> str:
+    """アップロード先URLを環境変数（.env）から取得"""
+    url = os.environ.get(name, '').strip()
+    if not url:
+        raise ValueError(f"アップロード先URLが.envに設定されていません: {name}")
+    return url
 
 
 def _compile_suffix_pattern(pattern_str: str) -> re.Pattern:

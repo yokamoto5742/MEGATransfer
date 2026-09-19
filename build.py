@@ -8,6 +8,7 @@ def build_executable():
         "--name=MEGATransfer",
         "--windowed",
         "--add-data", "utils/config.ini;.",
+        "--add-data", ".env:.",
         "--hidden-import", "playwright",
         "--hidden-import", "playwright.sync_api",
         "--collect-all", "playwright",

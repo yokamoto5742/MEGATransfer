@@ -11,7 +11,8 @@ MEGATransferは、指定パターンに一致するファイルを監視ディ�
 処理フロー: `main.py` → `app/tray_app.py`（`TrayApp`、トレイアイコン＋監視スレッド）→
 `service/file_upload_handler.py`（`FileUploadHandler`、`watchdog.FileSystemEventHandler`）→
 `service/onedrive_uploader.py`（`OneDriveUploader`、Playwright同期API）。設定は
-`utils/config_manager.py` が `utils/config.ini` から読み込みます。
+`utils/config_manager.py` が `utils/config.ini` から、アップロード先URLは `main.py` で
+`utils/env_loader.py` が読み込んだ `.env` の環境変数から取得します。
 
 ## 開発コマンド
 
@@ -31,15 +32,18 @@ python build.py            # PyInstallerによるWindows実行ファイルのビ
 - **config.iniのパス解決は2種類ある**: `utils/config_manager.py` の `get_config_path()` は、
   PyInstallerでフリーズされた状態では `sys._MEIPASS` から、それ以外はソースディレクトリから
   読み込みます。config.iniの配置に関する変更は両方のモードで動作する必要があります。
+  `.env`（`utils/env_loader.py` の `get_env_path()`）も同じ規則で、フリーズ時は `build.py` が
+  同梱した `sys._MEIPASS` の `.env`、それ以外はプロジェクトルートの `.env` を読み込みます。
 - **アップロードのタイミングはconfig.iniの値の連鎖で決まる**（個別の定数ではない）:
   `wait_time`（ファイル書き込み後の安定待ち）→ `batch_delay`（バッチアップロード前のデバウンス、
   新しいファイルが来るたびにリセット）→ `max_wait_time`（送信APIの応答待ち）→
   `post_upload_wait`（成功後の待機）。一部だけ変更すると検知タイミングがずれる可能性があります。
 - **ファイル名マッチングはサフィックスベース**: `get_upload_destinations()` は
-  `UPLOAD_DESTINATION_NAMES` の各名前について `[URL] <名前>` と `[filename] <名前>_pattern` を
-  組にして読み込みます。パターンは末尾に `$` がなければ自動付与し、ファイル名全体ではなく
+  `UPLOAD_DESTINATION_NAMES` の各名前について `.env` の `<名前>`（URL）と config.iniの
+  `[filename] <名前>_pattern` を組にして読み込みます。URLが未設定・空の場合は `ValueError` で
+  起動を止めます。パターンは末尾に `$` がなければ自動付与し、ファイル名全体ではなく
   拡張子を除いたステム部分に対してマッチングします。アップロード先を増やす場合は
-  `UPLOAD_DESTINATION_NAMES` とconfig.iniの両方に追加します。
+  `UPLOAD_DESTINATION_NAMES`・config.ini・`.env` に追加します。
 - **1回のバッチに複数のアップロード先が混ざる**: `_process_pending_files` はファイルを
   アップロード先ごとにまとめ、アップロード先ごとにブラウザを起動して順番に処理します。
 - **アップロード成功後のファイルは削除ではなく移動される**（`_move_uploaded_files`）: 移動先は

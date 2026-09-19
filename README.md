@@ -32,12 +32,14 @@ cd MEGATransfer
 uv sync
 ```
 
-3. 設定ファイルを編集します（`utils/config.ini`）
+3. プロジェクトルートに `.env` を作成し、OneDrive共有フォルダのURLを記載します（Git管理外）
 ```ini
-[URL]
-Taskdiary = <onedrive-shared-folder-url>
-Receive_file = <onedrive-shared-folder-url>
+Taskdiary=<onedrive-shared-folder-url>
+Receive_file=<onedrive-shared-folder-url>
+```
 
+4. 設定ファイルを編集します（`utils/config.ini`）
+```ini
 [Paths]
 src_dir = <directory-to-monitor>
 uploaded_dir = <directory-for-uploaded-files>
@@ -59,19 +61,16 @@ python main.py
 
 ### 設定ファイル（`utils/config.ini`）
 
-```ini
-[URL]
-# OneDrive共有フォルダのURL（編集可能リンク）
-Taskdiary = https://1drv.ms/f/c/xxxxx
-Receive_file = https://1drv.ms/f/c/yyyyy
+アップロード先のURLは `config.ini` ではなく `.env` の同名キー（`Taskdiary`、`Receive_file`）で指定します。
 
+```ini
 [Paths]
 src_dir = C:\Users\yokam\Desktop\target
 # アップロード済みファイルの保管先（未設定時は src_dir/_uploaded）
 uploaded_dir = C:\Users\yokam\Desktop\uploaded
 
 [filename]
-# ファイル名パターン（拡張子を除いたファイル名の末尾にマッチ）。[URL] の同名キーのURLへ転送
+# ファイル名パターン（拡張子を除いたファイル名の末尾にマッチ）。.env の同名キーのURLへ転送
 Taskdiary_pattern = _taskdiary
 Receive_file_pattern = _magnate
 
@@ -116,6 +115,7 @@ MEGATransfer/
 │   ├── __init__.py
 │   ├── config.ini                # 設定ファイル
 │   ├── config_manager.py         # 設定ローディング
+│   ├── env_loader.py             # .env読み込み
 │   ├── log_rotation.py           # ログ管理
 │   └── single_instance.py        # 多重起動防止
 ├── tests/                        # テストスイート
@@ -234,6 +234,7 @@ python build.py
 
 PyInstallerを使用して、以下をバンドルした実行ファイルを生成します:
 - `utils/config.ini` 設定ファイル
+- `.env`（アップロード先URL。ビルド前にプロジェクトルートに配置が必要）
 - すべての依存パッケージ
 
 ビルド結果は `dist/MEGATransfer.exe` に出力されます。
@@ -255,7 +256,7 @@ PyInstallerを使用して、以下をバンドルした実行ファイルを生
 
 ### アップロードが完了しない
 
-1. OneDrive共有フォルダのURLが有効か（編集可能リンクか）確認
+1. `.env` のOneDrive共有フォルダのURLが有効か（編集可能リンクか）確認
 2. ネットワーク接続を確認
 3. `config.ini`の `max_wait_time` を増やす
    ```ini

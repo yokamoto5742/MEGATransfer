@@ -13,16 +13,19 @@ def _config(text: str) -> configparser.ConfigParser:
 
 
 VALID_CONFIG = """
-[URL]
-Taskdiary = https://1drv.ms/f/taskdiary
-Receive_file = https://1drv.ms/f/receive
-
 [filename]
 Taskdiary_pattern = _taskdiary
 Receive_file_pattern = _magnate$
 """
 
 
+@pytest.fixture
+def upload_urls(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('Taskdiary', 'https://1drv.ms/f/taskdiary')
+    monkeypatch.setenv('Receive_file', 'https://1drv.ms/f/receive')
+
+
+@pytest.mark.usefixtures('upload_urls')
 class TestGetUploadDestinations:
     """アップロード先設定の読み込みテスト"""
 
@@ -41,10 +44,16 @@ class TestGetUploadDestinations:
             with pytest.raises(ValueError):
                 get_upload_destinations()
 
-    def test_missing_url_raises(self):
-        config = _config(VALID_CONFIG.replace("Taskdiary = https://1drv.ms/f/taskdiary", ""))
-        with patch('utils.config_manager.load_config', return_value=config):
-            with pytest.raises(configparser.NoOptionError):
+    def test_missing_url_raises(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv('Taskdiary')
+        with patch('utils.config_manager.load_config', return_value=_config(VALID_CONFIG)):
+            with pytest.raises(ValueError, match='Taskdiary'):
+                get_upload_destinations()
+
+    def test_empty_url_raises(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv('Receive_file', '')
+        with patch('utils.config_manager.load_config', return_value=_config(VALID_CONFIG)):
+            with pytest.raises(ValueError, match='Receive_file'):
                 get_upload_destinations()
 
     def test_reads_actual_config_ini(self):
