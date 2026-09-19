@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-19
+
 ### 追加
 - ファイル名パターンごとにOneDrive共有フォルダへアップロードする機能（`OneDriveUploader`）。`_taskdiary` は `Taskdiary`、`_magnate` は `Receive_file` のURLへ送信
 - 1回のバッチに複数のアップロード先のファイルが混ざった場合、アップロード先ごとに順番に処理
